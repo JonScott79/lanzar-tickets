@@ -116,6 +116,7 @@ function App() {
   const [password, setPassword] = useState('')
   const [resetMode, setResetMode] = useState(false)
   const [authSuccess, setAuthSuccess] = useState(null)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   // ========================================================
   // Authentication Listeners
@@ -193,6 +194,7 @@ function App() {
           setAuthError('Failed to verify account permissions.')
         } finally {
           setIsLoading(false)
+          setIsInitializing(false)
         }
       } else {
         // Logged out state reset
@@ -205,6 +207,7 @@ function App() {
         setAdminSelectedTicket(null)
         setTicketStage('details')
         setIsLoading(false) // Reset loading state
+        setIsInitializing(false)
       }
     })
 
@@ -229,9 +232,16 @@ function App() {
         error
       )
 
-      setAuthError(
-        'Something went wrong while signing you in with Google. Please try again.'
-      )
+      let message = 'Something went wrong while signing you in with Google. Please try again.'
+      if (error.code === 'auth/unauthorized-domain') {
+        message = 'This domain is not authorized for Google Sign-In. Please add it to the authorized domains in the Firebase Console.'
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        message = 'The sign-in popup was closed before completing authentication. Please try again.'
+      } else if (error.code === 'auth/popup-blocked') {
+        message = 'The sign-in popup was blocked by your browser. Please allow popups for this site and try again.'
+      }
+
+      setAuthError(message)
       setIsLoading(false)
     }
   }
@@ -396,9 +406,48 @@ function App() {
     }
   }
 
-  // ========================================================
-  // Render
-  // ========================================================
+  if (isInitializing) {
+    return (
+      <main className="ticket-terminal">
+        <header className="ticket-header">
+          <span className="terminal-header-title">
+            LANZAR SUPPORT TERMINAL
+          </span>
+        </header>
+
+        <section className="welcome-panel">
+          <div className="welcome-copy">
+            <div className="signin-content">
+              <div className="stella-dialogue signin-dialogue">
+                <img
+                  src="/images/decorations/stella-dialog.svg"
+                  alt=""
+                  className="stella-dialogue-art"
+                  aria-hidden="true"
+                />
+                <div className="stella-dialogue-content">
+                  <p className="signin-greeting">
+                    Initializing...
+                  </p>
+                  <p className="signin-question">
+                    Connecting to LANZAR launching facility support terminal...
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="stella-stage">
+            <img
+              src="/images/stella/stella-000.png"
+              alt="Stella, LANZAR Support Hostess"
+              className="stella"
+            />
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="ticket-terminal">
