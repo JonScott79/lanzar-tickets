@@ -104,6 +104,8 @@ function AdminPortal({
   const [customers, setCustomers] = useState([])
   const [custName, setCustName] = useState('')
   const [custEmail, setCustEmail] = useState('')
+  const [custPassword, setCustPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [custServices, setCustServices] = useState({
     it: false,
     web: false,
@@ -162,6 +164,10 @@ function AdminPortal({
       setCustomerError('Customer Email is required.')
       return
     }
+    if (!custPassword || custPassword.length < 6) {
+      setCustomerError('Password must be at least 6 characters.')
+      return
+    }
 
     const servicesArray = Object.keys(custServices).filter(
       (key) => custServices[key]
@@ -184,6 +190,7 @@ function AdminPortal({
         body: JSON.stringify({
           name: custName.trim(),
           email: custEmail.trim(),
+          password: custPassword,
           services: servicesArray,
         })
       })
@@ -193,17 +200,10 @@ function AdminPortal({
         throw new Error(result.error || 'Failed to register customer.')
       }
 
-      // Automatically trigger a password reset/invitation email
-      try {
-        await sendPasswordReset(custEmail.trim())
-        setCustomerSuccess(`Customer "${custName.trim()}" registered successfully! An invitation email has been sent.`)
-      } catch (emailErr) {
-        console.warn('Could not send password reset email automatically:', emailErr)
-        setCustomerSuccess(`Customer "${custName.trim()}" registered successfully, but we could not trigger the password setup email automatically. Please click SEND RESET to trigger it manually.`)
-      }
-
+      setCustomerSuccess(`Customer "${custName.trim()}" registered successfully with credentials.`)
       setCustName('')
       setCustEmail('')
+      setCustPassword('')
       setCustServices({
         it: false,
         web: false,
@@ -365,6 +365,23 @@ function AdminPortal({
         history: arrayUnion(historyEntry),
       })
 
+      // Trigger More Info Email notification via backend
+      try {
+        const idToken = await currentUser.getIdToken()
+        await fetch(`http://localhost:3001/api/tickets/${ticket.id}/more-info-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            adminMessage: moreInfoText.trim()
+          })
+        })
+      } catch (emailErr) {
+        console.error('Failed to trigger More Info notification email:', emailErr)
+      }
+
       setIsRequestingMoreInfo(false)
       setMoreInfoText('')
     } catch (err) {
@@ -380,7 +397,7 @@ function AdminPortal({
   // ========================================================
 
   const pendingCount = tickets.filter(
-    (t) => t.status === 'PENDING'
+    (t) => t.status === 'PENDING' || t.status === 'CUSTOMER_RESPONDED'
   ).length
 
   const approvedCount = tickets.filter(
@@ -391,9 +408,12 @@ function AdminPortal({
     (t) => t.status === 'MORE_INFO'
   ).length
 
-  const filteredTickets = tickets.filter(
-    (t) => t.status === activeTab
-  )
+  const filteredTickets = tickets.filter((t) => {
+    if (activeTab === 'PENDING') {
+      return t.status === 'PENDING' || t.status === 'CUSTOMER_RESPONDED'
+    }
+    return t.status === activeTab
+  })
 
   // ========================================================
   // Detail View Render
@@ -533,7 +553,7 @@ function AdminPortal({
                           <strong>
                             {entry.status}
                           </strong>{' '}
-                          by {entry.adminEmail}
+                          by {entry.adminEmail || entry.customerEmail || entry.unverifiedSender || 'System'}
                           <span className="history-time">
                             {formatDate(
                               entry.timestamp
@@ -809,6 +829,40 @@ function AdminPortal({
                   disabled={isLoading}
                   required
                 />
+              </div>
+
+              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="admin-meta-label">INITIAL PASSWORD</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px', width: '100%', paddingRight: '50px' }}
+                    value={custPassword}
+                    onChange={(e) => setCustPassword(e.target.value)}
+                    placeholder="At least 6 chars"
+                    disabled={isLoading}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-code)',
+                      fontSize: '0.7rem',
+                      fontWeight: 'bold',
+                      color: 'var(--retro-teal)',
+                      padding: 0
+                    }}
+                  >
+                    {showPassword ? 'HIDE' : 'SHOW'}
+                  </button>
+                </div>
               </div>
             </div>
 

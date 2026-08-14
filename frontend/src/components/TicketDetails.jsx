@@ -217,6 +217,22 @@ function TicketDetails({
         problemType,
         description
       )
+      
+      // Trigger new ticket email notification via backend
+      try {
+        const idToken = await auth.currentUser.getIdToken()
+        await fetch('http://localhost:3001/api/tickets/notify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({ ticketId: ticketNum })
+        })
+      } catch (emailErr) {
+        console.error('Failed to trigger new ticket notification email:', emailErr)
+      }
+
       setFinalTicketNumber(ticketNum)
       changeStage('success')
     } catch (err) {
