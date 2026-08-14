@@ -1,0 +1,14 @@
+# ==========================================================
+# LANZAR Tickets
+# Netlify Configuration
+# ==========================================================
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Tell Netlify Secrets Scanner to skip scanning the public client Firebase config
+  # to prevent the public Firebase Web API key false positive flag.
+  SECRETS_SCAN_OMIT_PATHS = "frontend/src/firebase/config.js"

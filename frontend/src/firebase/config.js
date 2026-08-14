@@ -16,13 +16,13 @@ import { initializeApp } from 'firebase/app'
 // ==========================
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyCm11MJPwYKk2ckDIrTOGLNHdyFkdCOM2k',
-  authDomain: 'lanzar-95ae3.firebaseapp.com',
-  projectId: 'lanzar-95ae3',
-  storageBucket: 'lanzar-95ae3.firebasestorage.app',
-  messagingSenderId: '61309916889',
-  appId: '1:61309916889:web:a6bce4cb213af2a52250c8',
-  measurementId: 'G-XCSPZLNR02',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
 // ==========================
