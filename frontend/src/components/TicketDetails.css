@@ -1,0 +1,413 @@
+/*
+    TicketDetails.css
+
+    LANZAR Support Tickets ticket detail styling.
+
+    Responsibilities
+
+    - Stella ticket dialogue
+    - Service-specific ticket form
+    - Ticket field presentation
+    - Ticket action controls
+    - Responsive ticket layout
+*/
+
+/* ==========================================================
+   Ticket Details
+   ========================================================== */
+
+.ticket-details {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 20px;
+}
+
+/* ==========================================================
+   Stella Ticket Dialogue
+   ========================================================== */
+
+.ticket-dialogue {
+  position: relative;
+  z-index: 5;
+
+  width: 125%;
+
+  margin-left: -70px;
+  margin-top: -45px;
+
+  overflow: visible;
+}
+
+.ticket-dialogue-art {
+  position: absolute;
+  z-index: 0;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: fill;
+
+  pointer-events: none;
+}
+
+.ticket-dialogue-content {
+  position: relative;
+  z-index: 2;
+
+  min-height: 300px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  padding:
+    72px
+    155px
+    125px
+    185px;
+}
+
+.ticket-greeting {
+  margin: 0;
+
+  color: var(--rocket-orange);
+
+  font-family: var(--font-heading);
+  font-size: clamp(2.2rem, 4vw, 3.8rem);
+  font-weight: 800;
+
+  line-height: 1;
+}
+
+.ticket-question {
+  max-width: 650px;
+
+  margin: 12px 0 0;
+
+  color: var(--deep-navy);
+
+  font-family: var(--font-heading);
+  font-size: clamp(1.1rem, 1.8vw, 1.65rem);
+  font-weight: 800;
+
+  line-height: 1.2;
+}
+
+/* ==========================================================
+   Ticket Form
+   ========================================================== */
+
+.ticket-form {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 24px 28px;
+
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--radius-lg);
+
+  background: var(--bg-secondary);
+
+  box-shadow: var(--shadow-small);
+}
+
+/* ==========================================================
+   Form Header
+   ========================================================== */
+
+.ticket-form-header {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  margin-bottom: 24px;
+
+  color: var(--retro-teal);
+
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  font-weight: 700;
+
+  letter-spacing: 0.16em;
+}
+
+.ticket-form-title {
+  white-space: nowrap;
+}
+
+/* ==========================================================
+   Field Labels
+   ========================================================== */
+
+.ticket-field-label {
+  margin-bottom: 8px;
+
+  color: var(--deep-navy);
+
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  letter-spacing: 0.12em;
+}
+
+/* ==========================================================
+   Select
+   ========================================================== */
+
+.ticket-select {
+  width: 100%;
+
+  min-height: 48px;
+
+  margin-bottom: 22px;
+
+  padding: 10px 14px;
+
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--radius-md);
+
+  background: var(--bg-primary);
+  color: var(--deep-navy);
+
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+
+  cursor: pointer;
+}
+
+/* ==========================================================
+   Textarea
+   ========================================================== */
+
+.ticket-textarea {
+  width: 100%;
+
+  min-height: 130px;
+
+  margin-bottom: 22px;
+
+  padding: 14px;
+
+  resize: vertical;
+
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--radius-md);
+
+  background: var(--bg-primary);
+  color: var(--deep-navy);
+
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+
+  line-height: 1.5;
+}
+
+.ticket-select:focus,
+.ticket-textarea:focus {
+  outline: none;
+
+  border-color: var(--rocket-orange);
+
+  box-shadow:
+    0 0 0 3px rgba(244, 107, 69, 0.16);
+}
+
+/* ==========================================================
+   Ticket Actions
+   ========================================================== */
+
+.ticket-actions {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-top: 4px;
+}
+
+.ticket-back-button,
+.ticket-next-button {
+  min-height: 44px;
+
+  padding: 10px 20px;
+
+  border-radius: var(--radius-pill);
+
+  font-family: var(--font-heading);
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    transform var(--speed-fast),
+    background var(--speed-normal),
+    color var(--speed-normal),
+    box-shadow var(--speed-normal);
+}
+
+.ticket-back-button {
+  border: 2px solid var(--retro-teal);
+
+  background: transparent;
+  color: var(--retro-teal);
+}
+
+.ticket-back-button:hover {
+  transform: translateY(-2px);
+
+  background: var(--retro-teal);
+  color: var(--text-light);
+
+  box-shadow: var(--shadow-small);
+}
+
+.ticket-next-button {
+  border: 2px solid var(--rocket-orange);
+
+  background: var(--rocket-orange);
+  color: var(--text-light);
+}
+
+.ticket-next-button:hover {
+  transform: translateY(-2px);
+
+  box-shadow: var(--shadow-small);
+}
+
+/* ==========================================================
+   Responsive
+   ========================================================== */
+
+@media (max-width: 850px) {
+  .ticket-dialogue {
+    padding:
+      12px
+      18px
+      6px;
+  }
+
+  .ticket-form {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticket-dialogue {
+    padding:
+      8px
+      10px
+      4px;
+  }
+
+  .ticket-form {
+    padding: 16px;
+  }
+
+  .ticket-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .ticket-back-button,
+  .ticket-next-button {
+    width: 100%;
+  }
+}
+
+/* ==========================================================
+   Ticket Review
+   ========================================================== */
+
+.ticket-review-field {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 6px;
+
+  margin-top: 14px;
+
+  padding:
+    12px
+    16px;
+
+  border:
+    1px solid
+    rgba(42, 114, 143, 0.2);
+
+  border-radius: 10px;
+
+  background: var(--bg-secondary);
+}
+
+.ticket-review-field strong {
+  color: var(--deep-navy);
+
+  font-family: var(--font-heading);
+  font-size: 1rem;
+}
+
+.ticket-review-description {
+  margin: 0;
+
+  color: var(--deep-navy);
+
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+
+  line-height: 1.5;
+
+  white-space: pre-wrap;
+}
+
+/* ==========================================================
+   Ticket Number Placeholder
+   ========================================================== */
+
+.ticket-number-placeholder {
+  margin:
+    12px
+    0
+    16px;
+
+  color: var(--retro-teal);
+
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  letter-spacing: 0.08em;
+}
+
+/* ==========================================================
+   Ticket Error
+   ========================================================== */
+
+.ticket-error {
+  margin:
+    10px
+    0
+    0;
+
+  color: var(--rocket-orange);
+
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  line-height: 1.4;
+}

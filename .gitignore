@@ -1,0 +1,52 @@
+# ==========================================================
+# LANZAR Tickets
+# Git Ignore
+# ==========================================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Firebase credentials
+firebase-credentials/
+**/firebase-credentials/
+*-firebase-adminsdk-*.json
+service-account*.json
+firebase-adminsdk*.json
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Local uploads / generated files
+uploads/
+**/uploads/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Local tooling
+coverage/
+.cache/

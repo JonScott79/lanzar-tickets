@@ -1,0 +1,476 @@
+/*
+    SignIn.css
+
+    LANZAR Support Tickets authentication styling.
+
+    Responsibilities
+
+    - Stella authentication dialogue
+    - Google sign-in presentation
+    - Authentication supporting text
+    - Responsive sign-in layout
+*/
+
+/* ==========================================================
+   Sign-In Content
+   ========================================================== */
+
+.signin-content {
+  position: relative;
+  z-index: 4;
+
+  display: flex;
+
+  flex-direction: column;
+  align-items: center;
+
+  width: 100%;
+}
+
+/* ==========================================================
+   Sign-In Dialogue
+   ========================================================== */
+
+.signin-dialogue {
+  width: 125%;
+  max-width: none;
+
+  margin-top: 0;
+  margin-left: -10px;
+
+  transform: translateY(-90px);
+}
+
+/* ==========================================================
+   Sign-In Dialogue Content
+   ========================================================== */
+
+.signin-dialogue .stella-dialogue-content {
+  min-height: 230px;
+
+  padding:
+    54px
+    90px
+    54px
+    115px;
+}
+
+/* ==========================================================
+   Sign-In Greeting
+   ========================================================== */
+
+.signin-greeting {
+  position: relative;
+  z-index: 2;
+
+  margin: 0;
+
+  color: var(--rocket-orange);
+
+  font-family: var(--font-heading);
+  font-size: clamp(2.8rem, 4.5vw, 4.5rem);
+  font-weight: 800;
+
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+/* ==========================================================
+   Sign-In Question
+   ========================================================== */
+
+.signin-question {
+  position: relative;
+  z-index: 2;
+
+  max-width: 620px;
+
+  margin: 18px 0 0;
+
+  color: var(--deep-navy);
+
+  font-family: var(--font-heading);
+  font-size: clamp(1.25rem, 2vw, 2rem);
+  font-weight: 800;
+
+  line-height: 1.15;
+}
+
+/* ==========================================================
+   Google Sign-In Button
+   ========================================================== */
+
+.google-signin-button {
+  position: relative;
+  z-index: 6;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 14px;
+
+  width: 360px;
+  min-height: 58px;
+
+  margin-top: -45px;
+  margin-left: auto;
+  margin-right: auto;
+
+  padding: 16px 32px;
+
+  border: 3px solid var(--retro-teal);
+  border-radius: var(--radius-pill);
+
+  background: var(--bg-secondary);
+  color: var(--deep-navy);
+
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 5px 0 rgba(42, 114, 143, 0.12);
+
+  transition:
+    transform var(--speed-fast),
+    background var(--speed-normal),
+    color var(--speed-normal),
+    border-color var(--speed-normal),
+    box-shadow var(--speed-normal);
+}
+
+.google-signin-button:hover {
+  transform: translateY(-4px);
+
+  background: var(--retro-teal);
+  color: var(--text-light);
+
+  border-color: var(--retro-teal);
+
+  box-shadow:
+    0 8px 0 rgba(42, 114, 143, 0.18),
+    var(--shadow-small);
+}
+
+.google-signin-button:active {
+  transform: translateY(0);
+
+  box-shadow:
+    0 2px 0 rgba(42, 114, 143, 0.12);
+}
+
+.google-signin-button:focus-visible {
+  outline: 3px solid var(--rocket-orange);
+  outline-offset: 4px;
+}
+
+/* ==========================================================
+   Google Icon
+   ========================================================== */
+
+.google-icon {
+  width: 24px;
+  height: 24px;
+
+  flex: 0 0 auto;
+}
+
+/* ==========================================================
+   Sign-In Note
+   ========================================================== */
+
+.signin-note {
+  width: 360px;
+  max-width: 100%;
+
+  margin:
+    12px
+    auto
+    0;
+
+  color: var(--deep-navy);
+
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+
+  line-height: 1.4;
+
+  text-align: center;
+
+  opacity: 0.65;
+}
+
+/* ==========================================================
+   Tablet
+   ========================================================== */
+
+@media (max-width: 1100px) {
+  .signin-dialogue {
+    width: 120%;
+
+    margin-left: -55px;
+  }
+
+  .signin-dialogue .stella-dialogue-content {
+    padding:
+      64px
+      90px
+      64px
+      110px;
+  }
+
+  .signin-greeting {
+    font-size: 3.2rem;
+  }
+
+  .signin-question {
+    font-size: 1.5rem;
+  }
+
+  .google-signin-button {
+    width: 340px;
+
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ==========================================================
+   Mobile
+   ========================================================== */
+
+@media (max-width: 850px) {
+  .signin-dialogue {
+    width: 100%;
+
+    margin-left: 0;
+
+    transform: translateY(-60px);
+  }
+
+  .signin-dialogue .stella-dialogue-content {
+    min-height: 260px;
+
+    padding:
+      52px
+      70px
+      52px
+      80px;
+  }
+
+  .signin-greeting {
+    font-size: 3rem;
+  }
+
+  .signin-question {
+    font-size: 1.5rem;
+  }
+
+  .google-signin-button {
+    width: 320px;
+
+    margin-top: -35px;
+  }
+
+  .signin-note {
+    width: 320px;
+  }
+}
+
+@media (max-width: 480px) {
+  .signin-dialogue {
+    width: 112%;
+
+    margin-left: -6%;
+
+    transform: translateY(-45px);
+  }
+
+  .signin-dialogue .stella-dialogue-content {
+    min-height: 220px;
+
+    padding:
+      44px
+      62px
+      44px
+      62px;
+  }
+
+  .signin-greeting {
+    font-size: 2.4rem;
+  }
+
+  .signin-question {
+    margin-top: 12px;
+
+    font-size: 1.2rem;
+  }
+
+  .google-signin-button {
+    width: 100%;
+    min-height: 54px;
+    margin-top: 0;
+  }
+
+  .signin-form {
+    width: calc(100% - 20px);
+    margin-top: -15px;
+  }
+
+  .signin-note {
+    width: calc(100% - 30px);
+  }
+}
+
+/* ==========================================================
+   Email / Password Sign-In Form Styles
+   ========================================================== */
+
+.signin-form {
+  width: 360px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: -45px; /* Pull up into the speech balloon */
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  z-index: 6;
+}
+
+.signin-field {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.signin-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.signin-field-label {
+  color: var(--deep-navy);
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+
+.signin-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--deep-navy);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+}
+
+.signin-input:focus {
+  outline: none;
+  border-color: var(--rocket-orange);
+  box-shadow: 0 0 0 3px rgba(244, 107, 69, 0.16);
+}
+
+.signin-forgot-link,
+.signin-back-link {
+  background: none;
+  border: none;
+  color: var(--retro-teal);
+  font-family: var(--font-code);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.signin-forgot-link:hover,
+.signin-back-link:hover {
+  color: var(--rocket-orange);
+}
+
+.signin-submit-button {
+  min-height: 48px;
+  border: 3px solid var(--rocket-orange);
+  border-radius: var(--radius-pill);
+  background: var(--rocket-orange);
+  color: var(--text-light);
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(244, 107, 69, 0.15);
+  transition: all var(--speed-fast);
+}
+
+.signin-submit-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 rgba(244, 107, 69, 0.2), var(--shadow-small);
+}
+
+.signin-submit-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 0 rgba(244, 107, 69, 0.15);
+}
+
+.signin-submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.signin-divider {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.signin-divider-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(42, 114, 143, 0.2);
+}
+
+.signin-divider-text {
+  padding: 0 10px;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--soft-gray);
+}
+
+.signin-success {
+  margin-top: 10px;
+  color: var(--retro-teal);
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.signin-form .google-signin-button {
+  margin-top: 0;
+  width: 100%;
+}
+
+.signin-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

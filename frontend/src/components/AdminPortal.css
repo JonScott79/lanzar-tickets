@@ -1,0 +1,641 @@
+/*
+    AdminPortal.css
+
+    LANZAR Support Tickets administrator portal styling.
+
+    Responsibilities
+
+    - Admin panel layout and scroll areas
+    - Status tabs and badge styling
+    - Ticket cards list structure
+    - Ticket details panel and metadata grid
+    - Button styles (APPROVE, MORE INFO, CANCEL, BACK)
+    - Clarification input form
+    - Ticket history listing
+    - Responsive layout breakpoint rules
+*/
+
+/* ==========================================================
+   Dashboard Queue Container
+   ========================================================== */
+
+.admin-queue-view,
+.admin-detail-view {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-queue-header {
+  margin-bottom: 16px;
+}
+
+.admin-panel-title {
+  margin: 0;
+  color: var(--retro-teal);
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.admin-error-text {
+  margin-top: 8px;
+  color: var(--rocket-orange);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ==========================================================
+   Tabs
+   ========================================================== */
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid rgba(42, 114, 143, 0.25);
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+}
+
+.admin-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--soft-gray);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--speed-fast);
+}
+
+.admin-tab:hover {
+  color: var(--retro-teal);
+  background: rgba(42, 114, 143, 0.06);
+}
+
+.admin-tab.active {
+  border-color: var(--retro-teal);
+  background: var(--bg-secondary);
+  color: var(--retro-teal);
+  box-shadow: var(--shadow-small);
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-code);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-light);
+}
+
+.badge-pending {
+  background-color: var(--atomic-gold);
+  color: var(--deep-navy);
+}
+
+.badge-approved {
+  background-color: var(--retro-teal);
+}
+
+.badge-more-info {
+  background-color: var(--rocket-orange);
+}
+
+/* ==========================================================
+   Ticket Cards List
+   ========================================================== */
+
+.admin-ticket-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Custom scroll bar */
+.admin-ticket-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-ticket-list::-webkit-scrollbar-track {
+  background: rgba(42, 114, 143, 0.05);
+  border-radius: var(--radius-pill);
+}
+
+.admin-ticket-list::-webkit-scrollbar-thumb {
+  background: rgba(42, 114, 143, 0.35);
+  border-radius: var(--radius-pill);
+}
+
+.admin-ticket-list::-webkit-scrollbar-thumb:hover {
+  background: var(--retro-teal);
+}
+
+.admin-no-tickets {
+  text-align: center;
+  padding: 36px 0;
+  color: var(--soft-gray);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.admin-ticket-card {
+  padding: 16px 20px;
+  border: 2px solid rgba(42, 114, 143, 0.25);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  transition: all var(--speed-fast);
+}
+
+.admin-ticket-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--retro-teal);
+  box-shadow: var(--shadow-small);
+}
+
+.admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.admin-card-number {
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--retro-teal);
+}
+
+.admin-card-service {
+  font-family: var(--font-code);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(42, 114, 143, 0.1);
+  color: var(--retro-teal);
+}
+
+.admin-card-body {
+  margin-bottom: 14px;
+}
+
+.admin-card-customer {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.admin-card-summary {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: var(--soft-gray);
+}
+
+.summary-label {
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+
+.admin-card-excerpt {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(42, 114, 143, 0.1);
+  padding-top: 10px;
+}
+
+.admin-card-time {
+  font-size: 0.72rem;
+  color: var(--soft-gray);
+}
+
+.admin-card-view-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--retro-teal);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--retro-teal);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--speed-fast);
+}
+
+.admin-card-view-btn:hover {
+  background: var(--retro-teal);
+  color: var(--text-light);
+}
+
+/* ==========================================================
+   Ticket Detail View
+   ========================================================== */
+
+.admin-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.admin-back-button {
+  padding: 8px 16px;
+  border: 2px solid var(--retro-teal);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--retro-teal);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--speed-fast);
+}
+
+.admin-back-button:hover {
+  background: var(--retro-teal);
+  color: var(--text-light);
+}
+
+.admin-status-badge {
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  color: var(--text-light);
+}
+
+.status-pending {
+  background-color: var(--atomic-gold);
+  color: var(--deep-navy);
+}
+
+.status-approved {
+  background-color: var(--retro-teal);
+}
+
+.status-more_info {
+  background-color: var(--rocket-orange);
+}
+
+.admin-ticket-title {
+  margin: 0 0 18px;
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--deep-navy);
+}
+
+/* Metadata Grid */
+.admin-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  background: rgba(42, 114, 143, 0.04);
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 114, 143, 0.15);
+  margin-bottom: 20px;
+}
+
+.admin-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-meta-label {
+  font-family: var(--font-code);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--soft-gray);
+}
+
+.admin-meta-item strong {
+  font-size: 0.85rem;
+  color: var(--deep-navy);
+}
+
+.admin-meta-value {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.admin-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.admin-full-description {
+  margin: 0;
+  padding: 14px;
+  border: 2px solid rgba(42, 114, 143, 0.2);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+/* Clarification message text styling */
+.message-block {
+  padding: 14px;
+  border: 2px dashed var(--rocket-orange);
+  border-radius: 8px;
+  background: rgba(244, 107, 69, 0.03);
+}
+
+.info-label {
+  color: var(--rocket-orange);
+}
+
+.admin-message-text {
+  margin: 4px 0 0;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--deep-navy);
+}
+
+/* History logs */
+.history-section {
+  border-top: 1px solid rgba(42, 114, 143, 0.15);
+  padding-top: 16px;
+}
+
+.admin-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-history-item {
+  display: flex;
+  gap: 12px;
+}
+
+.history-bullet {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--retro-teal);
+  margin-top: 6px;
+}
+
+.history-details {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.history-details strong {
+  color: var(--deep-navy);
+}
+
+.history-time {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--soft-gray);
+  margin-top: 2px;
+}
+
+.history-entry-msg {
+  margin: 4px 0 0;
+  font-style: italic;
+  color: var(--deep-navy);
+}
+
+/* Actions */
+.admin-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.admin-btn-approve,
+.admin-btn-more-info,
+.admin-btn-cancel,
+.admin-btn-submit-info {
+  min-height: 44px;
+  padding: 10px 24px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--speed-fast);
+}
+
+.admin-btn-approve {
+  border: 2px solid var(--retro-teal);
+  background: var(--retro-teal);
+  color: var(--text-light);
+}
+
+.admin-btn-approve:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-small);
+}
+
+.admin-btn-more-info {
+  border: 2px solid var(--rocket-orange);
+  background: transparent;
+  color: var(--rocket-orange);
+}
+
+.admin-btn-more-info:hover {
+  transform: translateY(-2px);
+  background: var(--rocket-orange);
+  color: var(--text-light);
+  box-shadow: var(--shadow-small);
+}
+
+/* Clarification input form */
+.admin-more-info-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 2px solid var(--rocket-orange);
+  border-radius: 12px;
+  background: rgba(244, 107, 69, 0.02);
+}
+
+.admin-more-info-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid var(--rocket-orange);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--deep-navy);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.admin-more-info-textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(244, 107, 69, 0.16);
+}
+
+.admin-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-btn-cancel {
+  border: 2px solid var(--soft-gray);
+  background: transparent;
+  color: var(--soft-gray);
+}
+
+.admin-btn-cancel:hover {
+  background: var(--soft-gray);
+  color: var(--text-light);
+}
+
+.admin-btn-submit-info {
+  border: 2px solid var(--rocket-orange);
+  background: var(--rocket-orange);
+  color: var(--text-light);
+}
+
+.admin-btn-submit-info:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-small);
+}
+
+/* ==========================================================
+   Responsive breakpoints
+   ========================================================== */
+
+@media (max-width: 850px) {
+  .admin-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+  
+  .admin-ticket-list {
+    max-height: 400px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-tabs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .admin-tab {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+  }
+
+  .admin-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-btn-approve,
+  .admin-btn-more-info {
+    width: 100%;
+  }
+
+  .admin-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .admin-btn-cancel,
+  .admin-btn-submit-info {
+    width: 100%;
+  }
+}
+
+/* ==========================================================
+   Customer Management Panel
+   ========================================================== */
+
+.admin-customers-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.admin-customer-form {
+  padding: 22px;
+  border: 3px solid rgba(42, 114, 143, 0.25);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-form-section-title {
+  margin: 0 0 16px;
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--retro-teal);
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+/* Word-wrap and Text-overflow prevention */
+.admin-meta-value,
+.admin-card-excerpt,
+.admin-full-description,
+.admin-message-text {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
