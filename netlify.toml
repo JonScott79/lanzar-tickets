@@ -9,6 +9,15 @@
   publish = "dist"
 
 [build.environment]
-  # Tell Netlify Secrets Scanner to skip scanning the public client Firebase config
+  # Tell Netlify Secrets Scanner to skip scanning these files
   # to prevent the public Firebase Web API key false positive flag.
-  SECRETS_SCAN_OMIT_PATHS = "frontend/src/firebase/config.js"
+  SECRETS_SCAN_OMIT_PATHS = "frontend/src/firebase/config.js,netlify.toml"
+
+  # Public Client-side Firebase Configuration for production builds
+  VITE_FIREBASE_API_KEY = "AIzaSyCm11MJPwYKk2ckDIrTOGLNHdyFkdCOM2k"
+  VITE_FIREBASE_AUTH_DOMAIN = "lanzar-95ae3.firebaseapp.com"
+  VITE_FIREBASE_PROJECT_ID = "lanzar-95ae3"
+  VITE_FIREBASE_STORAGE_BUCKET = "lanzar-95ae3.firebasestorage.app"
+  VITE_FIREBASE_MESSAGING_SENDER_ID = "61309916889"
+  VITE_FIREBASE_APP_ID = "1:61309916889:web:a6bce4cb213af2a52250c8"
+  VITE_FIREBASE_MEASUREMENT_ID = "G-XCSPZLNR02"
