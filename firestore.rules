@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if the user is an active administrator
+    function isAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
+    // Customer registry profiles
+    match /customers/{customerId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == customerId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Administrator registry
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      // Write access is denied (managed out-of-band/server-side only)
+    }
+
+    // Service counter documents (IT, WEB, THREADLINE counters)
+    match /counters/{serviceId} {
+      allow read: if request.auth != null;
+      // Allow customers to increment counter during transaction, but only by exactly 1
+      allow update: if request.auth != null && (
+        isAdmin() || (
+          request.resource.data.nextNumber == resource.data.nextNumber + 1 &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nextNumber'])
+        )
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    // Support tickets
+    match /tickets/{ticketId} {
+      // Validate ticket schema and owner on creation
+      allow create: if request.auth != null && (
+        isAdmin() || (
+          request.resource.data.authUid == request.auth.uid &&
+          request.resource.data.customerId == request.auth.uid &&
+          request.resource.data.status == 'PENDING' &&
+          request.resource.data.history.size() == 0
+        )
+      );
+      // Read access isolated to owners and admins
+      allow read: if request.auth != null && 
+        (resource.data.authUid == request.auth.uid || isAdmin());
+      // Updates (approvals, more info status changes) restricted to admins only
+      allow update: if isAdmin();
+      // Deletions are completely denied
+    }
+  }
+}
