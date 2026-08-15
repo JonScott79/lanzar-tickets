@@ -26,8 +26,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import fs from 'node:fs'
 import { 
   sendNewTicketNotification, 
-  sendMoreInfoRequest, 
-  sendCustomerResponseNotification 
+  sendCustomerConfirmation 
 } from './emailService.js'
 
 dotenv.config()
@@ -332,13 +331,20 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
       return res.json({ success: true, alreadySent: true })
     }
 
-    console.log(`[EMAIL] Attempting provider email request for ticket: ${ticketId}`)
-    const info = await sendNewTicketNotification(ticketData)
+    console.log(`[EMAIL] Attempting provider email requests for ticket: ${ticketId}`)
+    const adminInfo = await sendNewTicketNotification(ticketData)
+    const customerInfo = await sendCustomerConfirmation(ticketData)
 
-    if (info && info.messageId) {
-      console.log(`[EMAIL] Provider accepted message for ${ticketId}. Message ID: ${info.messageId}`)
+    if (adminInfo && adminInfo.messageId) {
+      console.log(`[EMAIL] Provider accepted admin notification for ${ticketId}. Message ID: ${adminInfo.messageId}`)
     } else {
-      console.warn(`[EMAIL WARN] Provider request completed but no Message ID was returned for ${ticketId}`)
+      console.warn(`[EMAIL WARN] Admin notification request completed but no Message ID was returned for ${ticketId}`)
+    }
+
+    if (customerInfo && customerInfo.messageId) {
+      console.log(`[EMAIL] Provider accepted customer confirmation for ${ticketId}. Message ID: ${customerInfo.messageId}`)
+    } else {
+      console.warn(`[EMAIL WARN] Customer confirmation request completed but no Message ID was returned for ${ticketId}`)
     }
 
     // Mark as sent
@@ -353,205 +359,7 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
   }
 })
 
-// Trigger More Info email (Admin Triggered after Firestore save)
-app.post('/api/tickets/:ticketId/more-info-email', authenticateAdmin, async (req, res) => {
-  const { ticketId } = req.params
-  const { adminMessage } = req.body
 
-  if (!adminMessage || !adminMessage.trim()) {
-    return res.status(400).json({ error: 'Admin message is required' })
-  }
-
-  try {
-    const ticketRef = db.collection('tickets').doc(ticketId)
-    const ticketDoc = await ticketRef.get()
-
-    if (!ticketDoc.exists) {
-      return res.status(404).json({ error: 'Ticket not found' })
-    }
-
-    const ticketData = ticketDoc.data()
-
-    // Send More Info Email
-    await sendMoreInfoRequest(ticketData, adminMessage.trim())
-
-    return res.json({ success: true })
-  } catch (error) {
-    console.error('[BACKEND ERROR] More Info email failed:', error)
-    return res.status(500).json({ error: 'Failed to send email: ' + error.message })
-  }
-})
-
-// =====================================
-// Inbound Email Webhook Parsing
-// =====================================
-
-// Clean email quote helper
-function cleanEmailBody(text) {
-  if (!text) return ''
-  const patterns = [
-    /\r?\n\s*On .* wrote:/i,
-    /\r?\n\s*On .* at .* wrote:/i,
-    /\r?\n\s*---* ?Original Message ?---*/i,
-    /\r?\n\s*From: .*/i,
-    /\r?\n\s*Sent: .*/i,
-    /\r?\n\s*To: .*/i,
-    /\r?\n\s*__+/ // Line separators
-  ]
-  
-  let cleaned = text
-  for (const pattern of patterns) {
-    const parts = cleaned.split(pattern)
-    cleaned = parts[0]
-  }
-  return cleaned.trim()
-}
-
-// Extract ticket number helper
-function extractTicketNumber(toAddress) {
-  if (!toAddress) return null
-  const match = toAddress.match(/reply\+tkt-(LZ-[A-Z]+-\d+)(?:@|\+)/i)
-  if (match) {
-    return match[1].toUpperCase()
-  }
-  const genericMatch = toAddress.match(/(LZ-[A-Z]+-\d+)/i)
-  if (genericMatch) {
-    return genericMatch[1].toUpperCase()
-  }
-  return null
-}
-
-// Inbound Email Webhook (POST)
-app.post('/api/inbound-email', async (req, res) => {
-  if (!db) {
-    console.error('[INBOUND ERROR] Inbound email received but Database (Firestore) is not initialized.')
-    return res.status(500).json({ error: 'Database service is currently unavailable.' })
-  }
-
-  console.log('[INBOUND] Webhook received:', req.body)
-
-  // Verify Webhook Secret if configured
-  const webhookSecret = process.env.INBOUND_WEBHOOK_SECRET
-  if (webhookSecret) {
-    const incomingSecret = req.query.secret || req.headers['x-webhook-secret']
-    if (incomingSecret !== webhookSecret) {
-      console.warn('[INBOUND WARN] Unauthorized webhook access attempt.')
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
-  }
-
-  const { From, To, TextBody, MessageID } = req.body
-
-  if (!From || !To || !MessageID) {
-    return res.status(400).json({ error: 'Missing required webhook fields (From, To, MessageID)' })
-  }
-
-  try {
-    // 1. Extract Ticket Number
-    const ticketNumber = extractTicketNumber(To)
-    if (!ticketNumber) {
-      console.warn(`[INBOUND WARN] Could not extract ticket number from recipient: ${To}`)
-      return res.status(400).json({ error: 'Invalid recipient: No ticket ID found' })
-    }
-
-    // 2. Load Ticket
-    const ticketRef = db.collection('tickets').doc(ticketNumber)
-    const ticketDoc = await ticketRef.get()
-    if (!ticketDoc.exists) {
-      console.warn(`[INBOUND WARN] Ticket not found: ${ticketNumber}`)
-      return res.status(404).json({ error: 'Ticket not found' })
-    }
-
-    const ticket = ticketDoc.data()
-
-    // 2b. Block replies to resolved tickets
-    if (ticket.status === 'RESOLVED') {
-      console.log(`[INBOUND] Reply received for resolved ticket: ${ticketNumber}. Skipping update.`)
-      
-      // Mark Message ID as processed to prevent infinite webhook retries
-      const processedRef = db.collection('processed_emails').doc(MessageID)
-      await processedRef.set({
-        processedAt: FieldValue.serverTimestamp(),
-        ticketNumber: ticketNumber,
-        resolvedSkip: true
-      })
-      
-      return res.json({ success: true, message: 'Ticket is resolved. Reply ignored.' })
-    }
-
-    // 3. Idempotency Check (Duplicate message protection)
-    const processedRef = db.collection('processed_emails').doc(MessageID)
-    const processedDoc = await processedRef.get()
-    if (processedDoc.exists) {
-      console.log(`[INBOUND] Duplicate webhook message detected: ${MessageID}. Skipping.`)
-      return res.json({ success: true, duplicate: true })
-    }
-
-    // 4. Validate Sender
-    const senderEmail = From.trim().toLowerCase()
-    const customerEmail = ticket.customerEmail.trim().toLowerCase()
-    const authEmail = ticket.authEmail ? ticket.authEmail.trim().toLowerCase() : ''
-
-    const isSenderValid = (senderEmail === customerEmail || senderEmail === authEmail)
-
-    if (!isSenderValid) {
-      console.warn(`[INBOUND WARN] Sender mismatch for ticket ${ticketNumber}. Sender: ${senderEmail}, Ticket Owner: ${customerEmail}`)
-      
-      // Treat as unverified message. Append to history but do NOT change status or send notification to Jon.
-      const historyEntry = {
-        status: 'UNVERIFIED_EMAIL',
-        timestamp: new Date().toISOString(),
-        message: TextBody,
-        unverifiedSender: From
-      }
-
-      await ticketRef.update({
-        history: FieldValue.arrayUnion(historyEntry)
-      })
-
-      await processedRef.set({
-        processedAt: FieldValue.serverTimestamp(),
-        ticketNumber: ticketNumber,
-        verified: false
-      })
-
-      return res.json({ success: true, verified: false, message: 'Unverified sender attached' })
-    }
-
-    // 5. Clean text body and append history entry
-    const cleanedBody = cleanEmailBody(TextBody)
-    const historyEntry = {
-      status: 'CUSTOMER_RESPONDED',
-      timestamp: new Date().toISOString(),
-      message: cleanedBody,
-      customerEmail: From
-    }
-
-    // 6. Update Ticket Status
-    await ticketRef.update({
-      status: 'CUSTOMER_RESPONDED',
-      updatedAt: new Date(),
-      history: FieldValue.arrayUnion(historyEntry)
-    })
-
-    // 7. Mark Message ID as processed
-    await processedRef.set({
-      processedAt: FieldValue.serverTimestamp(),
-      ticketNumber: ticketNumber,
-      verified: true
-    })
-
-    console.log(`[INBOUND] Successfully processed customer reply for ticket: ${ticketNumber}`)
-
-    // 8. Notify Jon of customer reply
-    await sendCustomerResponseNotification(ticket, cleanedBody)
-
-    return res.json({ success: true, verified: true })
-  } catch (error) {
-    console.error('[INBOUND ERROR] Failed to process email:', error)
-    return res.status(500).json({ error: 'Internal Server Error' })
-  }
-})
 
 // =====================================
 // Start Server

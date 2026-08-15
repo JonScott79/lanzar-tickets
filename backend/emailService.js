@@ -110,39 +110,16 @@ function logPreviewUrl(info) {
  * Send a notification email when a new support ticket is submitted.
  */
 export async function sendNewTicketNotification(ticket) {
-  const subject = `LANZAR Support Ticket — ${ticket.ticketNumber}`
+  const subject = `New LANZAR Support Ticket #${ticket.ticketNumber}`
   const adminLink = `https://tickets.lanzar.me/?ticketId=${ticket.ticketNumber}`
 
-  const textBody = `LANZAR SUPPORT TICKETS
+  const textBody = `You got a new support ticket from ${ticket.customerName}.
 
-NEW TICKET RECEIVED
+Ticket: #${ticket.ticketNumber}
+Subject: ${ticket.category}
 
-Ticket:
-${ticket.ticketNumber}
-
-Customer:
-${ticket.customerName}
-
-Email:
-${ticket.customerEmail}
-
-Service:
-${ticket.service.toUpperCase()}
-
-Category:
-${ticket.category}
-
-Submitted:
-${new Date().toLocaleString()}
-
-Description:
-${ticket.description}
-
---------------------------------------------------
-
-VIEW TICKET
-${adminLink}
-`
+Open in LANZAR Tickets admin portal:
+${adminLink}`
 
   const mailOptions = {
     from: `"LANZAR Terminal" <${fromEmail}>`,
@@ -160,109 +137,46 @@ ${adminLink}
     return info
   } catch (error) {
     console.error(`[EMAIL ERROR] Provider request failed for ${ticket.ticketNumber}:`, error.message)
-    // Do not throw the error; satisfy the requirement "THE TICKET MUST REMAIN CREATED"
   }
 }
 
 /**
- * Send a clarification request email to the customer.
+ * Send a confirmation email to the customer when a new ticket is submitted.
  */
-export async function sendMoreInfoRequest(ticket, adminMessage) {
-  const subject = `LANZAR Ticket ${ticket.ticketNumber} — More Information Requested`
-  const replyTo = `reply+tkt-${ticket.ticketNumber}@${inboundDomain}`
+export async function sendCustomerConfirmation(ticket) {
+  const subject = `LANZAR Support Ticket Received — #${ticket.ticketNumber}`
 
-  const textBody = `LANZAR SUPPORT TICKETS
+  const textBody = `Hello ${ticket.customerName},
 
-Additional information is needed for your support ticket.
+We have received your support ticket #${ticket.ticketNumber}.
 
-Ticket:
-${ticket.ticketNumber}
+Basic Ticket Information:
+- Service: ${ticket.service.toUpperCase()}
+- Category: ${ticket.category}
+- Description: ${ticket.description}
 
-Service:
-${ticket.service.toUpperCase()}
+If you need to provide additional details or follow up, please email our support representative directly at jon@lanzar.me by clicking the link below:
 
-Message from LANZAR:
-${adminMessage}
+mailto:jon@lanzar.me?subject=Follow-up%20on%20Support%20Ticket%20%23${ticket.ticketNumber}
 
---------------------------------------------------
-
-Please reply directly to this email with the requested information.
-
-Your reply will be attached to ticket ${ticket.ticketNumber}.
-`
-
-  const mailOptions = {
-    from: `"LANZAR Support" <${fromEmail}>`,
-    to: ticket.customerEmail,
-    replyTo: replyTo,
-    subject: subject,
-    text: textBody,
-    // Add threading headers
-    headers: {
-      'Message-ID': `<moreinfo-${ticket.ticketNumber}@${inboundDomain}>`,
-      'References': `<ticket-${ticket.ticketNumber}@${inboundDomain}>`
-    }
-  }
-
-  try {
-    const mailTransporter = await getTransporter()
-    const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] More Info request sent to ${ticket.customerEmail} for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
-    logPreviewUrl(info)
-    return info
-  } catch (error) {
-    console.error(`[EMAIL ERROR] Failed to send More Info request to ${ticket.customerEmail} for ${ticket.ticketNumber}:`, error.message)
-  }
-}
-
-/**
- * Send an email to Jon when a customer replies to a More Info request.
- */
-export async function sendCustomerResponseNotification(ticket, responseText) {
-  const subject = `Re: LANZAR Ticket ${ticket.ticketNumber} — Customer Response`
-  const adminLink = `https://tickets.lanzar.me/?ticketId=${ticket.ticketNumber}`
-
-  const textBody = `LANZAR SUPPORT TICKETS
-
-CUSTOMER RESPONDED TO TICKET
-
-Ticket:
-${ticket.ticketNumber}
-
-Customer:
-${ticket.customerName}
-
-Email:
-${ticket.customerEmail}
-
-Customer Response:
-${responseText}
-
---------------------------------------------------
-
-VIEW TICKET
-${adminLink}
-`
+Thank you,
+LANZAR Support Terminal`
 
   const mailOptions = {
     from: `"LANZAR Terminal" <${fromEmail}>`,
-    to: notificationEmail,
+    to: ticket.customerEmail,
     subject: subject,
     text: textBody,
-    // Threading headers to link to the original More Info request
-    headers: {
-      'In-Reply-To': `<moreinfo-${ticket.ticketNumber}@${inboundDomain}>`,
-      'References': `<moreinfo-${ticket.ticketNumber}@${inboundDomain}>`
-    }
   }
 
   try {
     const mailTransporter = await getTransporter()
+    console.log(`[EMAIL] Confirmation request sent for ticket: ${ticket.ticketNumber} to customer: ${ticket.customerEmail}`)
     const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] Customer response notification sent to ${notificationEmail} for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
+    console.log(`[EMAIL] Confirmation accepted for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
     logPreviewUrl(info)
     return info
   } catch (error) {
-    console.error(`[EMAIL ERROR] Failed to send customer response notification for ${ticket.ticketNumber}:`, error.message)
+    console.error(`[EMAIL ERROR] Confirmation request failed for ${ticket.ticketNumber}:`, error.message)
   }
 }

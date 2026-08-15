@@ -330,65 +330,74 @@ function AdminPortal({
     }
   }
 
-  const handleMoreInfoSubmit = async (ticket) => {
-    if (!moreInfoText.trim()) {
-      setError('Please provide a reason or question for the customer.')
-      return
-    }
-
+  const handleSetStatus = async (ticket, newStatus) => {
     setIsLoading(true)
     setError('')
 
     try {
-      const ticketRef = doc(
-        db,
-        'tickets',
-        ticket.id
-      )
+      const ticketRef = doc(db, 'tickets', ticket.id)
+      const currentUser = auth.currentUser
 
+      const historyEntry = {
+        status: newStatus,
+        timestamp: new Date().toISOString(),
+        adminId: currentUser?.uid || 'system',
+        adminUid: currentUser?.uid || 'system',
+        adminEmail: currentUser?.email || 'admin@lanzar.me',
+        message: `Status manually updated to ${newStatus}.`,
+        type: 'ADMIN',
+        action: newStatus,
+      }
+
+      const updates = {
+        status: newStatus,
+        updatedAt: new Date(),
+        history: arrayUnion(historyEntry),
+      }
+
+      if (newStatus === 'RESOLVED') {
+        updates.resolvedAt = new Date()
+        updates.resolvedBy = currentUser?.uid || 'system'
+      }
+
+      await updateDoc(ticketRef, updates)
+    } catch (err) {
+      console.error(`Failed to update status to ${newStatus}:`, err)
+      setError(`Failed to update ticket status to ${newStatus}.`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRequestMoreInfo = async (ticket) => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const ticketRef = doc(db, 'tickets', ticket.id)
       const currentUser = auth.currentUser
 
       const historyEntry = {
         status: 'MORE_INFO',
         timestamp: new Date().toISOString(),
         adminId: currentUser?.uid || 'system',
-        adminEmail:
-          currentUser?.email || 'admin@lanzar.me',
-        message: moreInfoText.trim(),
+        adminUid: currentUser?.uid || 'system',
+        adminEmail: currentUser?.email || 'admin@lanzar.me',
+        message: 'Requested more information from customer.',
+        type: 'ADMIN',
+        action: 'MORE_INFO',
       }
 
       await updateDoc(ticketRef, {
         status: 'MORE_INFO',
         updatedAt: new Date(),
-        adminId: currentUser?.uid || 'system',
-        adminEmail:
-          currentUser?.email || 'admin@lanzar.me',
-        adminMessage: moreInfoText.trim(),
         history: arrayUnion(historyEntry),
       })
 
-      // Trigger More Info Email notification via backend
-      try {
-        const idToken = await currentUser.getIdToken()
-        await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/more-info-email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: JSON.stringify({
-            adminMessage: moreInfoText.trim()
-          })
-        })
-      } catch (emailErr) {
-        console.error('Failed to trigger More Info notification email:', emailErr)
-      }
-
-      setIsRequestingMoreInfo(false)
-      setMoreInfoText('')
+      // Open local mail client
+      window.location.href = `mailto:${ticket.customerEmail}?subject=LANZAR%20Support%20Ticket%20%23${ticket.ticketNumber || ticket.id}`
     } catch (err) {
-      console.error('Clarification update failed:', err)
-      setError('Failed to request clarification. Please try again.')
+      console.error('Failed to request more info:', err)
+      setError('Failed to update status.')
     } finally {
       setIsLoading(false)
     }
@@ -625,10 +634,18 @@ function AdminPortal({
             </p>
           )}
 
-          {selectedTicket.status !== 'RESOLVED' && selectedTicket.status !== 'MORE_INFO' && (
+          {selectedTicket.status !== 'RESOLVED' && (
             <div className="admin-actions">
-              {!isRequestingMoreInfo && !isConfirmingResolve ? (
+              {!isConfirmingResolve ? (
                 <>
+                  <a
+                    href={`mailto:${selectedTicket.customerEmail}?subject=LANZAR%20Support%20Ticket%20%23${selectedTicket.ticketNumber || selectedTicket.id}`}
+                    className="admin-btn-more-info"
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    EMAIL CUSTOMER
+                  </a>
+
                   {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'CUSTOMER_RESPONDED') && (
                     <button
                       type="button"
@@ -640,14 +657,38 @@ function AdminPortal({
                     </button>
                   )}
 
-                  <button
-                    type="button"
-                    className="admin-btn-more-info"
-                    onClick={() => setIsRequestingMoreInfo(true)}
-                    disabled={isLoading}
-                  >
-                    MORE INFO
-                  </button>
+                  {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'CUSTOMER_RESPONDED' || selectedTicket.status === 'APPROVED') && (
+                    <button
+                      type="button"
+                      className="admin-btn-more-info"
+                      onClick={() => handleRequestMoreInfo(selectedTicket)}
+                      disabled={isLoading}
+                    >
+                      REQUEST MORE INFO
+                    </button>
+                  )}
+
+                  {selectedTicket.status === 'MORE_INFO' && (
+                    <>
+                      <button
+                        type="button"
+                        className="admin-btn-approve"
+                        onClick={() => handleSetStatus(selectedTicket, 'CUSTOMER_RESPONDED')}
+                        disabled={isLoading}
+                      >
+                        MARK RESPONDED
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-btn-cancel"
+                        style={{ borderColor: 'var(--border-medium)', background: 'transparent', color: 'var(--text-light)', minHeight: '44px', padding: '10px 24px', borderRadius: 'var(--radius-pill)', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                        onClick={() => handleSetStatus(selectedTicket, 'PENDING')}
+                        disabled={isLoading}
+                      >
+                        SET TO PENDING
+                      </button>
+                    </>
+                  )}
 
                   <button
                     type="button"
@@ -658,7 +699,7 @@ function AdminPortal({
                     RESOLVE TICKET
                   </button>
                 </>
-              ) : isConfirmingResolve ? (
+              ) : (
                 <div className="admin-more-info-form" style={{ borderColor: 'var(--soft-gray)' }}>
                   <label className="admin-meta-label">
                     RESOLVE THIS TICKET?
@@ -680,49 +721,6 @@ function AdminPortal({
                       disabled={isLoading}
                     >
                       {isLoading ? 'RESOLVING...' : 'RESOLVE TICKET'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="admin-more-info-form">
-                  <label
-                    htmlFor="more-info-input"
-                    className="admin-meta-label"
-                  >
-                    WHAT INFORMATION DO YOU NEED?
-                  </label>
-
-                  <textarea
-                    id="more-info-input"
-                    className="admin-more-info-textarea"
-                    rows="3"
-                    value={moreInfoText}
-                    onChange={(e) => setMoreInfoText(e.target.value)}
-                    placeholder="Specify what details are missing from the customer request..."
-                    disabled={isLoading}
-                  />
-
-                  <div className="admin-form-actions">
-                    <button
-                      type="button"
-                      className="admin-btn-cancel"
-                      onClick={() => {
-                        setIsRequestingMoreInfo(false)
-                        setMoreInfoText('')
-                        setError('')
-                      }}
-                      disabled={isLoading}
-                    >
-                      CANCEL
-                    </button>
-
-                    <button
-                      type="button"
-                      className="admin-btn-submit-info"
-                      onClick={() => handleMoreInfoSubmit(selectedTicket)}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? 'SENDING...' : 'SEND REQUEST'}
                     </button>
                   </div>
                 </div>
