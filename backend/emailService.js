@@ -6,106 +6,78 @@
     Responsibilities
 
     - Send outbound transactional email notifications (new ticket, admin more info, customer response)
-    - Set up ticket-specific Reply-To headers for two-way email tracking
-    - Handle SMTP connection configurations safely
-    - Support automatic Ethereal Mail account generation for zero-config testing
+    - Communicate directly with the Brevo Transactional Email HTTPS API
+    - Support environment variable configurations safely
 */
 
-import nodemailer from 'nodemailer'
 import dotenv from 'dotenv'
 
 dotenv.config()
 
-if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
-  console.log('[EMAIL] SMTP configuration missing')
-  console.log('[EMAIL] Email delivery unavailable until production SMTP variables are configured')
-}
-
-let transporter = null
-
-/**
- * Get or initialize the Nodemailer transporter.
- * If credentials are not supplied, it dynamically generates an Ethereal test account.
- */
-async function getTransporter() {
-  if (transporter) {
-    return transporter
-  }
-
-  const host = process.env.SMTP_HOST || 'smtp.ethereal.email'
-  const port = parseInt(process.env.SMTP_PORT || '587', 10)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASSWORD
-
-  if (user && pass) {
-    transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-      connectionTimeout: 10000, // 10 seconds connection timeout
-      greetingTimeout: 10000,   // 10 seconds greeting timeout
-      socketTimeout: 10000      // 10 seconds socket inactivity timeout
-    })
-    console.log(`[EMAIL] SMTP Transporter initialized using configured user: ${user}`)
-  } else {
-    // If running in production (or on Railway), do not spin up Ethereal mail dynamically!
-    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      console.warn('[EMAIL] SMTP configuration missing')
-      console.warn('[EMAIL] Email delivery unavailable until production SMTP variables are configured')
-      transporter = {
-        sendMail: async (options) => {
-          console.warn(`[EMAIL WARN] Email send attempted but SMTP is not configured. Recipient: ${options.to}`)
-          throw new Error('SMTP configuration missing. Email delivery unavailable.')
-        }
-      }
-    } else {
-      console.log('[EMAIL] No SMTP credentials provided. Creating temporary Ethereal test account...')
-      try {
-        const testAccount = await nodemailer.createTestAccount()
-        transporter = nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
-          port: 587,
-          secure: false,
-          auth: {
-            user: testAccount.user,
-            pass: testAccount.pass
-          }
-        })
-        console.log(`[EMAIL] Temporary Ethereal account created:`)
-        console.log(`  User: ${testAccount.user}`)
-        console.log(`  Pass: [Generated Pass]`)
-      } catch (err) {
-        console.error('[EMAIL ERROR] Failed to create Ethereal test account, falling back to mock transporter:', err.message)
-        // Mock fallback so we don't throw
-        transporter = {
-          sendMail: async (options) => {
-            console.log(`[EMAIL MOCK] Mock send (no SMTP configured):`)
-            console.log(`  From: ${options.from}`)
-            console.log(`  To: ${options.to}`)
-            console.log(`  Subject: ${options.subject}`)
-            return { messageId: 'mock-id-' + Date.now() }
-          }
-        }
-      }
-    }
-  }
-  return transporter
-}
-
-const fromEmail = process.env.EMAIL_FROM || 'support@lanzar.me'
+const fromEmail = process.env.EMAIL_FROM || 'no-reply@lanzar.me'
 const notificationEmail = process.env.TICKET_NOTIFICATION_EMAIL || 'jon@lanzar.me'
-const inboundDomain = process.env.INBOUND_EMAIL_DOMAIN || 'lanzar.me'
+
+if (!process.env.BREVO_API_KEY) {
+  console.log('[EMAIL] BREVO_API_KEY environment variable is missing')
+  console.log('[EMAIL] Email delivery unavailable until production BREVO_API_KEY variable is configured')
+}
 
 /**
- * Log the Ethereal preview link if applicable.
+ * Dispatches a transactional email using the Brevo HTTP API.
+ * Falls back to mock logging if BREVO_API_KEY is not defined.
  */
-function logPreviewUrl(info) {
-  if (info && info.messageId && !process.env.SMTP_USER) {
-    const previewUrl = nodemailer.getTestMessageUrl(info)
-    if (previewUrl) {
-      console.log(`[EMAIL] Preview sent email at: ${previewUrl}`)
+async function sendViaBrevo(toEmail, toName, subject, textContent) {
+  const apiKey = process.env.BREVO_API_KEY
+
+  if (!apiKey) {
+    console.log(`[EMAIL MOCK] Outbound email mock dispatch (no BREVO_API_KEY configured):`)
+    console.log(`  To: ${toEmail}`)
+    console.log(`  Subject: ${subject}`)
+    return { messageId: 'mock-id-' + Date.now() }
+  }
+
+  const payload = {
+    sender: {
+      name: 'LANZAR Terminal',
+      email: fromEmail
+    },
+    to: [
+      {
+        email: toEmail,
+        name: toName || toEmail
+      }
+    ],
+    subject: subject,
+    textContent: textContent
+  }
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const responseText = await response.text()
+      console.error(`[EMAIL ERROR] Brevo API request failed for recipient: ${toEmail}. Status: ${response.status}. Response: ${responseText}`)
+      throw new Error(`Brevo API returned status ${response.status}: ${responseText}`)
     }
+
+    const data = await response.json()
+    const messageId = data.messageId || 'api-success-' + Date.now()
+    
+    // Log accepted after Brevo returns a successful HTTP response
+    console.log(`[EMAIL] Provider request accepted for recipient: ${toEmail}. Message ID: ${messageId}`)
+    
+    return { messageId }
+  } catch (error) {
+    console.error(`[EMAIL ERROR] Brevo API connection failed for recipient: ${toEmail}:`, error.message)
+    throw error
   }
 }
 
@@ -131,19 +103,8 @@ ${adminLink}`
 
   console.log(`[EMAIL] Generated Admin Notification text body:\n${textBody}`)
 
-  const mailOptions = {
-    from: `"LANZAR Terminal" <${fromEmail}>`,
-    to: notificationEmail,
-    subject: subject,
-    text: textBody,
-  }
-
   try {
-    const mailTransporter = await getTransporter()
-    console.log(`[EMAIL] Provider request sent for ticket: ${ticketNumber} to recipient: ${notificationEmail}`)
-    const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] Provider accepted message for ${ticketNumber}. Message ID: ${info.messageId}`)
-    logPreviewUrl(info)
+    const info = await sendViaBrevo(notificationEmail, 'Jon Scott', subject, textBody)
     return info
   } catch (error) {
     console.error(`[EMAIL ERROR] Provider request failed for ${ticketNumber}:`, error.message)
@@ -161,8 +122,14 @@ export async function sendCustomerConfirmation(ticket) {
   const service = ticket?.service || 'N/A'
   const category = ticket?.category || 'N/A'
   const description = ticket?.description || 'No description provided.'
+  const customerEmail = ticket?.customerEmail
 
-  const subject = `LANZAR Support Ticket Received — #${ticketNumber}`
+  if (!customerEmail) {
+    console.warn(`[EMAIL WARN] Cannot send customer confirmation for ${ticketNumber}: No customerEmail resolved.`)
+    return
+  }
+
+  const subject = `LANZAR Support Ticket #${ticketNumber} Received`
 
   const textBody = `Hello ${customerName},
 
@@ -182,19 +149,8 @@ LANZAR Support Terminal`
 
   console.log(`[EMAIL] Generated Customer Confirmation text body:\n${textBody}`)
 
-  const mailOptions = {
-    from: `"LANZAR Terminal" <${fromEmail}>`,
-    to: ticket?.customerEmail,
-    subject: subject,
-    text: textBody,
-  }
-
   try {
-    const mailTransporter = await getTransporter()
-    console.log(`[EMAIL] Confirmation request sent for ticket: ${ticketNumber} to customer: ${ticket?.customerEmail}`)
-    const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] Confirmation accepted for ${ticketNumber}. Message ID: ${info.messageId}`)
-    logPreviewUrl(info)
+    const info = await sendViaBrevo(customerEmail, customerName, subject, textBody)
     return info
   } catch (error) {
     console.error(`[EMAIL ERROR] Confirmation request failed for ${ticketNumber}:`, error.message)
