@@ -65,7 +65,6 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     console.log('[BACKEND] Initializing Firebase Admin via FIREBASE_SERVICE_ACCOUNT environment variable')
   } catch (parseErr) {
     console.error('[BACKEND ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:', parseErr.message)
-    process.exit(1)
   }
 } else {
   const credentialPath = 'C:\\Projects\\LANZAR\\firebase-credentials\\lanzar-95ae3-firebase-adminsdk-fbsvc-86e8ea5817.json'
@@ -76,30 +75,44 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       console.log('[BACKEND] Initializing Firebase Admin via local credentials file')
     } catch (readErr) {
       console.error('[BACKEND ERROR] Failed to read/parse local credentials file:', readErr.message)
-      process.exit(1)
     }
   } else {
-    console.error(`[BACKEND ERROR] Firebase service credentials not found. Set FIREBASE_SERVICE_ACCOUNT env var or place file at: ${credentialPath}`)
-    process.exit(1)
+    console.warn(`[BACKEND WARN] Firebase service credentials not found. Set FIREBASE_SERVICE_ACCOUNT env var or place file at: ${credentialPath}`)
   }
 }
 
-const adminApp = getApps().length > 0
-  ? getApps()[0]
-  : initializeApp({
-      credential: cert(serviceAccount)
-    })
+let adminApp = null
+let auth = null
+let db = null
 
-const auth = getAuth(adminApp)
-const db = getFirestore(adminApp)
+if (serviceAccount) {
+  try {
+    adminApp = getApps().length > 0
+      ? getApps()[0]
+      : initializeApp({
+          credential: cert(serviceAccount)
+        })
 
-console.log('[BACKEND] Connected to Firebase Project:', serviceAccountProjectId)
+    auth = getAuth(adminApp)
+    db = getFirestore(adminApp)
+
+    console.log('[BACKEND] Connected to Firebase Project:', serviceAccountProjectId)
+  } catch (initErr) {
+    console.error('[BACKEND ERROR] Failed to initialize Firebase Admin SDK:', initErr.message)
+  }
+} else {
+  console.warn('[BACKEND WARN] Firebase Admin SDK is NOT initialized. Services requiring Firestore or Auth will fail.')
+}
 
 // =====================================
 // Middleware: Admin Authorization
 // =====================================
 
 async function authenticateAdmin(req, res, next) {
+  if (!auth || !db) {
+    console.error('[BACKEND ERROR] Admin authorization attempted but Firebase Admin SDK is not initialized.')
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' })
@@ -129,6 +142,10 @@ async function authenticateAdmin(req, res, next) {
 // =====================================
 
 async function authenticateUser(req, res, next) {
+  if (!auth) {
+    console.error('[BACKEND ERROR] User authorization attempted but Firebase Admin SDK is not initialized.')
+    return res.status(500).json({ error: 'Authentication service is currently unavailable.' })
+  }
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' })
@@ -280,6 +297,11 @@ app.post('/api/customers/:uid/services', authenticateAdmin, async (req, res) => 
 
 // Send Email Notification for New Ticket (Customer Triggered after Firestore save)
 app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
+  if (!db) {
+    console.error('[BACKEND ERROR] Ticket notification requested but Database (Firestore) is not initialized.')
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
   const { ticketId } = req.body
 
   if (!ticketId) {
@@ -401,6 +423,11 @@ function extractTicketNumber(toAddress) {
 
 // Inbound Email Webhook (POST)
 app.post('/api/inbound-email', async (req, res) => {
+  if (!db) {
+    console.error('[INBOUND ERROR] Inbound email received but Database (Firestore) is not initialized.')
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
   console.log('[INBOUND] Webhook received:', req.body)
 
   // Verify Webhook Secret if configured
