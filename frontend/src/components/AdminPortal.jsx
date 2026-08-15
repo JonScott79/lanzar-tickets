@@ -109,8 +109,7 @@ function AdminPortal({
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [custName, setCustName] = useState('')
   const [custEmail, setCustEmail] = useState('')
-  const [custPassword, setCustPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
   const [custServices, setCustServices] = useState({
     it: false,
     web: false,
@@ -195,10 +194,6 @@ function AdminPortal({
       setCustomerError('Customer Email is required.')
       return
     }
-    if (!custPassword || custPassword.length < 6) {
-      setCustomerError('Password must be at least 6 characters.')
-      return
-    }
 
     const servicesArray = Object.keys(custServices).filter(
       (key) => custServices[key]
@@ -222,8 +217,8 @@ function AdminPortal({
           accountId: selectedAccountId,
           name: custName.trim(),
           email: custEmail.trim(),
-          password: custPassword,
           services: servicesArray,
+          sendWelcomeEmail: sendWelcomeEmail
         })
       })
 
@@ -232,10 +227,16 @@ function AdminPortal({
         throw new Error(result.error || 'Failed to register customer.')
       }
 
-      setCustomerSuccess(`Customer "${custName.trim()}" registered successfully with credentials.`)
+      if (result.warning) {
+        setCustomerSuccess(result.warning)
+      } else if (result.message) {
+        setCustomerSuccess(result.message)
+      } else {
+        setCustomerSuccess(`Customer "${custName.trim()}" registered successfully. Welcome email sent.`)
+      }
+
       setCustName('')
       setCustEmail('')
-      setCustPassword('')
       setCustServices({
         it: false,
         web: false,
@@ -244,6 +245,38 @@ function AdminPortal({
     } catch (err) {
       console.error('Error registering customer:', err)
       setCustomerError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSendWelcomeEmail = async (customer) => {
+    const email = customer.customerEmail || customer.authEmail
+    const name = customer.customerName || customer.displayName || 'Customer'
+    if (!email) return
+
+    setCustomerError('')
+    setCustomerSuccess('')
+    setIsLoading(true)
+    try {
+      const idToken = await auth.currentUser.getIdToken()
+      const response = await fetch(`${API_BASE_URL}/api/customers/${customer.id}/welcome-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        }
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send welcome email.')
+      }
+
+      setCustomerSuccess(result.message || `Welcome email sent to "${name}" (${email}) successfully.`)
+    } catch (err) {
+      console.error('Error sending welcome email:', err)
+      setCustomerError('Failed to send welcome email: ' + err.message)
     } finally {
       setIsLoading(false)
     }
@@ -1018,38 +1051,18 @@ function AdminPortal({
                 />
               </div>
 
-              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="admin-meta-label">INITIAL PASSWORD</label>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
+                <label className="admin-meta-label">WELCOME INVITATION</label>
+                <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', height: '42px', fontSize: '0.85rem' }}>
                   <input
-                    type={showPassword ? "text" : "password"}
-                    className="admin-more-info-textarea"
-                    style={{ resize: 'none', height: '42px', padding: '10px', width: '100%', paddingRight: '50px' }}
-                    value={custPassword}
-                    onChange={(e) => setCustPassword(e.target.value)}
-                    placeholder="At least 6 chars"
+                    type="checkbox"
+                    checked={sendWelcomeEmail}
+                    onChange={(e) => setSendWelcomeEmail(e.target.checked)}
                     disabled={isLoading}
-                    required
+                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '10px',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-code)',
-                      fontSize: '0.7rem',
-                      fontWeight: 'bold',
-                      color: 'var(--retro-teal)',
-                      padding: 0
-                    }}
-                  >
-                    {showPassword ? 'HIDE' : 'SHOW'}
-                  </button>
-                </div>
+                  Send Welcome Email
+                </label>
               </div>
             </div>
 
@@ -1123,6 +1136,17 @@ function AdminPortal({
                             </span>
                           ))}
                         </div>
+
+                        <button
+                          type="button"
+                          className="admin-card-view-btn"
+                          style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', padding: '5px 12px' }}
+                          onClick={() => handleSendWelcomeEmail(c)}
+                          disabled={isLoading}
+                        >
+                          SEND WELCOME
+                        </button>
+
                         <button
                           type="button"
                           className="admin-card-view-btn"

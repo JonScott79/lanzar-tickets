@@ -173,3 +173,48 @@ LANZAR Support Terminal`
     console.error(`[EMAIL ERROR] Confirmation request failed for ${ticketNumber}:`, error.message)
   }
 }
+
+/**
+ * Send a welcome email with a secure password-setup link to a newly registered customer user.
+ */
+export async function sendWelcomeEmail(userEmail, userName, accountName, resetLink) {
+  console.log(`[EMAIL] sendWelcomeEmail invoked for recipient: ${userEmail} (Account: ${accountName})`)
+
+  if (!userEmail) {
+    console.warn('[EMAIL WARN] Cannot send welcome email: missing recipient email address.')
+    return
+  }
+
+  const name = userName || 'Customer'
+  const account = accountName || 'LANZAR Tickets'
+  const subject = 'Welcome to LANZAR Tickets — Account Invitation'
+
+  const textBody = `Hello ${name},
+
+Welcome to LANZAR Tickets.
+
+Your support account for ${account} has been created.
+
+Username: ${userEmail}
+
+Please click the link below to set your password and activate your account:
+
+${resetLink}
+
+After setting your password, visit https://tickets.lanzar.me to sign in.
+
+If you did not expect this invitation, please contact LANZAR Support at jon@lanzar.me.
+
+Thank you,
+LANZAR Support Terminal`
+
+  console.log(`[EMAIL] Dispatching Welcome Email to ${userEmail}...`)
+
+  try {
+    const info = await sendViaBrevo(userEmail, name, subject, textBody)
+    return info
+  } catch (error) {
+    console.error(`[EMAIL ERROR] Welcome email dispatch failed for ${userEmail}:`, error.message)
+    throw error
+  }
+}

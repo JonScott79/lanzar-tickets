@@ -26,7 +26,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import fs from 'node:fs'
 import { 
   sendNewTicketNotification, 
-  sendCustomerConfirmation 
+  sendCustomerConfirmation,
+  sendWelcomeEmail
 } from './emailService.js'
 
 dotenv.config()
@@ -174,18 +175,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'LANZAR Tickets Backend' })
 })
 
-// Create Customer Account (Firebase Auth + Firestore Profile)
+// Create Customer Account (Firebase Auth + Firestore Profile + Welcome Email)
 app.post('/api/customers', authenticateAdmin, async (req, res) => {
-  const { name, email, password, services, accountId } = req.body
+  const { name, email, services, accountId, sendWelcomeEmail: sendEmailFlag } = req.body
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Customer Name is required.' })
   }
   if (!email || !email.trim()) {
     return res.status(400).json({ error: 'Customer Email is required.' })
-  }
-  if (password && password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters.' })
   }
   if (!Array.isArray(services) || services.length === 0) {
     return res.status(400).json({ error: 'At least one authorized service must be selected.' })
@@ -203,44 +201,81 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
     if (!accountDoc.exists || accountDoc.data().active !== true) {
       return res.status(400).json({ error: 'Selected account does not exist or is inactive.' })
     }
+    const accountName = accountDoc.data().name || 'LANZAR Tickets'
 
-    // 1. Check if customer document already exists in Firestore
-    const existingDocQuery = await db.collection('customers')
-      .where('customerEmail', '==', normalizedEmail)
-      .limit(1)
-      .get()
-
-    if (!existingDocQuery.empty) {
-      return res.status(400).json({ error: 'An account already exists for this email address.' })
-    }
-
-    // 2. Check if user already exists in Firebase Auth
+    // 1. Check if user already exists in Firebase Auth
+    let authUser = null
     try {
-      await auth.getUserByEmail(normalizedEmail)
-      return res.status(400).json({ error: 'An account already exists for this email address.' })
-    } catch (authError) {
-      if (authError.code !== 'auth/user-not-found') {
-        throw authError
+      authUser = await auth.getUserByEmail(normalizedEmail)
+    } catch (authErr) {
+      if (authErr.code !== 'auth/user-not-found') {
+        throw authErr
       }
     }
 
-    // 3. Create Firebase Auth user
-    let authUser
+    if (authUser) {
+      // User exists in Firebase Auth — check which account they belong to
+      const userDoc = await db.collection('users').doc(authUser.uid).get()
+      if (userDoc.exists) {
+        const existingAccountId = userDoc.data().accountId
+        if (existingAccountId === targetAccountId) {
+          // User already belongs to this account. Resend welcome email if requested.
+          if (sendEmailFlag !== false) {
+            try {
+              const resetLink = await auth.generatePasswordResetLink(normalizedEmail)
+              await sendWelcomeEmail(normalizedEmail, name.trim(), accountName, resetLink)
+              return res.json({
+                success: true,
+                uid: authUser.uid,
+                email: normalizedEmail,
+                name: name.trim(),
+                services,
+                emailSent: true,
+                message: `User already exists for ${accountName}. Welcome email sent.`
+              })
+            } catch (resendErr) {
+              return res.json({
+                success: true,
+                uid: authUser.uid,
+                email: normalizedEmail,
+                name: name.trim(),
+                services,
+                emailSent: false,
+                warning: `User already exists for ${accountName}, but welcome email could not be delivered: ${resendErr.message}`
+              })
+            }
+          }
+          return res.json({
+            success: true,
+            uid: authUser.uid,
+            email: normalizedEmail,
+            name: name.trim(),
+            services,
+            message: `User already exists for ${accountName}.`
+          })
+        } else {
+          // User belongs to ANOTHER account — REJECT with clear security error
+          return res.status(400).json({
+            error: 'This email address is already registered under another customer account.'
+          })
+        }
+      }
+    }
+
+    // 2. Create Firebase Auth user without password
     try {
       authUser = await auth.createUser({
         email: normalizedEmail,
         displayName: name.trim(),
-        ...(password ? { password } : {})
       })
-      console.log(`[BACKEND] Auth user created successfully with UID: ${authUser.uid}`)
+      console.log(`[BACKEND] Auth user created successfully with UID: ${authUser.uid} (No password created)`)
     } catch (createAuthError) {
       console.error('[BACKEND ERROR] Firebase Auth user creation failed:', createAuthError)
-      return res.status(400).json({ error: 'Failed to create authentication credentials: ' + createAuthError.message })
+      return res.status(400).json({ error: 'Failed to create customer account: ' + createAuthError.message })
     }
 
-    // 4. Write customer profile to Firestore (both legacy and new collections)
+    // 3. Write customer profile to Firestore (both legacy and new collections)
     try {
-      // Write to legacy customers collection (backward compatibility)
       await db.collection('customers').doc(authUser.uid).set({
         customerId: authUser.uid,
         customerName: name.trim(),
@@ -251,9 +286,7 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
         active: true,
         createdAt: FieldValue.serverTimestamp()
       })
-      console.log(`[BACKEND] Firestore customer record created for: ${normalizedEmail}`)
 
-      // Write to new users collection with explicit accountId
       await db.collection('users').doc(authUser.uid).set({
         accountId: targetAccountId,
         displayName: name.trim(),
@@ -262,16 +295,30 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
         active: true,
         createdAt: FieldValue.serverTimestamp()
       })
-      console.log(`[BACKEND] Firestore user record created for: ${normalizedEmail} (accountId: ${targetAccountId})`)
+      console.log(`[BACKEND] Firestore records created for: ${normalizedEmail} (accountId: ${targetAccountId})`)
     } catch (firestoreError) {
       console.error('[BACKEND ERROR] Firestore write failed, rolling back Firebase Auth user...', firestoreError)
       try {
         await auth.deleteUser(authUser.uid)
-        console.log('[BACKEND] Rollback complete: Deleted Auth user UID:', authUser.uid)
       } catch (rollbackError) {
-        console.error('[BACKEND ERROR] Rollback failed to delete Auth user:', rollbackError.message)
+        console.error('[BACKEND ERROR] Rollback failed:', rollbackError.message)
       }
-      return res.status(500).json({ error: 'Failed to complete customer database registration. Auth account rolled back.' })
+      return res.status(500).json({ error: 'Failed to complete database registration. Auth account rolled back.' })
+    }
+
+    // 4. Send Welcome Email if requested
+    let emailSent = false
+    let warning = null
+
+    if (sendEmailFlag !== false) {
+      try {
+        const resetLink = await auth.generatePasswordResetLink(normalizedEmail)
+        await sendWelcomeEmail(normalizedEmail, name.trim(), accountName, resetLink)
+        emailSent = true
+      } catch (emailErr) {
+        console.error('[BACKEND ERROR] Welcome email failed to send:', emailErr.message)
+        warning = 'Customer registered successfully, but welcome email could not be sent.'
+      }
     }
 
     return res.json({
@@ -279,11 +326,70 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
       uid: authUser.uid,
       email: normalizedEmail,
       name: name.trim(),
-      services: services
+      services: services,
+      emailSent: emailSent,
+      ...(warning ? { warning } : {})
     })
   } catch (error) {
     console.error('[BACKEND ERROR] Customer creation failed:', error)
     return res.status(500).json({ error: 'Failed to create customer: ' + error.message })
+  }
+})
+
+// Send or Resend Welcome Email for an Existing Customer
+app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res) => {
+  const { uid } = req.params
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get()
+    const custDoc = await db.collection('customers').doc(uid).get()
+
+    let email = null
+    let name = null
+    let accountId = null
+
+    if (userDoc.exists) {
+      const uData = userDoc.data()
+      email = uData.email
+      name = uData.displayName
+      accountId = uData.accountId
+    } else if (custDoc.exists) {
+      const cData = custDoc.data()
+      email = cData.customerEmail || cData.authEmail
+      name = cData.customerName || cData.displayName
+      accountId = cData.accountId
+    } else {
+      try {
+        const authRecord = await auth.getUser(uid)
+        email = authRecord.email
+        name = authRecord.displayName
+      } catch (e) {
+        return res.status(404).json({ error: 'Customer user record not found.' })
+      }
+    }
+
+    if (!email) {
+      return res.status(404).json({ error: 'Customer email address not found.' })
+    }
+
+    let accountName = 'LANZAR Tickets'
+    if (accountId) {
+      const accDoc = await db.collection('accounts').doc(accountId).get()
+      if (accDoc.exists) {
+        accountName = accDoc.data().name || accountName
+      }
+    }
+
+    const resetLink = await auth.generatePasswordResetLink(email)
+    await sendWelcomeEmail(email, name, accountName, resetLink)
+
+    return res.json({
+      success: true,
+      message: `Welcome email sent successfully to ${email}.`
+    })
+  } catch (error) {
+    console.error(`[BACKEND ERROR] Failed to send welcome email for UID ${uid}:`, error)
+    return res.status(500).json({ error: 'Failed to send welcome email: ' + error.message })
   }
 })
 
