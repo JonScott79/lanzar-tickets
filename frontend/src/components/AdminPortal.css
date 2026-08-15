@@ -114,6 +114,11 @@
   background-color: var(--rocket-orange);
 }
 
+.badge-resolved {
+  background-color: var(--soft-gray);
+  color: var(--text-light);
+}
+
 /* ==========================================================
    Ticket Cards List
    ========================================================== */
@@ -311,6 +316,16 @@
   background-color: var(--rocket-orange);
 }
 
+.status-resolved {
+  background-color: var(--soft-gray);
+  color: var(--text-light);
+}
+
+.status-customer_responded {
+  background-color: var(--atomic-gold);
+  color: var(--deep-navy);
+}
+
 .admin-ticket-title {
   margin: 0 0 18px;
   font-family: var(--font-heading);
@@ -458,7 +473,8 @@
 .admin-btn-approve,
 .admin-btn-more-info,
 .admin-btn-cancel,
-.admin-btn-submit-info {
+.admin-btn-submit-info,
+.admin-btn-resolve {
   min-height: 44px;
   padding: 10px 24px;
   border-radius: var(--radius-pill);
@@ -489,6 +505,19 @@
 .admin-btn-more-info:hover {
   transform: translateY(-2px);
   background: var(--rocket-orange);
+  color: var(--text-light);
+  box-shadow: var(--shadow-small);
+}
+
+.admin-btn-resolve {
+  border: 2px solid var(--soft-gray);
+  background: transparent;
+  color: var(--soft-gray);
+}
+
+.admin-btn-resolve:hover {
+  transform: translateY(-2px);
+  background: var(--soft-gray);
   color: var(--text-light);
   box-shadow: var(--shadow-small);
 }

@@ -54,6 +54,7 @@ function AdminPortal({
   const [activeTab, setActiveTab] = useState('PENDING')
   const [moreInfoText, setMoreInfoText] = useState('')
   const [isRequestingMoreInfo, setIsRequestingMoreInfo] = useState(false)
+  const [isConfirmingResolve, setIsConfirmingResolve] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -393,6 +394,47 @@ function AdminPortal({
     }
   }
 
+  const handleResolve = async (ticket) => {
+    setIsLoading(true)
+    setError('')
+
+    try {
+      const ticketRef = doc(
+        db,
+        'tickets',
+        ticket.id
+      )
+
+      const currentUser = auth.currentUser
+
+      const historyEntry = {
+        status: 'RESOLVED',
+        timestamp: new Date().toISOString(),
+        adminId: currentUser?.uid || 'system',
+        adminUid: currentUser?.uid || 'system',
+        adminEmail: currentUser?.email || 'admin@lanzar.me',
+        message: 'Ticket resolved.',
+        type: 'ADMIN',
+        action: 'RESOLVED',
+      }
+
+      await updateDoc(ticketRef, {
+        status: 'RESOLVED',
+        updatedAt: new Date(),
+        resolvedAt: new Date(),
+        resolvedBy: currentUser?.uid || 'system',
+        history: arrayUnion(historyEntry),
+      })
+
+      setIsConfirmingResolve(false)
+    } catch (err) {
+      console.error('Resolution failed:', err)
+      setError('Failed to resolve the ticket. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // ========================================================
   // Filtering
   // ========================================================
@@ -407,6 +449,10 @@ function AdminPortal({
 
   const moreInfoCount = tickets.filter(
     (t) => t.status === 'MORE_INFO'
+  ).length
+
+  const resolvedCount = tickets.filter(
+    (t) => t.status === 'RESOLVED'
   ).length
 
   const filteredTickets = tickets.filter((t) => {
@@ -579,38 +625,64 @@ function AdminPortal({
             </p>
           )}
 
-          {selectedTicket.status === 'PENDING' && (
+          {selectedTicket.status !== 'RESOLVED' && selectedTicket.status !== 'MORE_INFO' && (
             <div className="admin-actions">
-              {!isRequestingMoreInfo ? (
+              {!isRequestingMoreInfo && !isConfirmingResolve ? (
                 <>
-                  <button
-                    type="button"
-                    className="admin-btn-approve"
-                    onClick={() =>
-                      handleApprove(
-                        selectedTicket
-                      )
-                    }
-                    disabled={isLoading}
-                  >
-                    {isLoading
-                      ? 'PROCESSING...'
-                      : 'APPROVE'}
-                  </button>
+                  {(selectedTicket.status === 'PENDING' || selectedTicket.status === 'CUSTOMER_RESPONDED') && (
+                    <button
+                      type="button"
+                      className="admin-btn-approve"
+                      onClick={() => handleApprove(selectedTicket)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'PROCESSING...' : 'APPROVE'}
+                    </button>
+                  )}
 
                   <button
                     type="button"
                     className="admin-btn-more-info"
-                    onClick={() =>
-                      setIsRequestingMoreInfo(
-                        true
-                      )
-                    }
+                    onClick={() => setIsRequestingMoreInfo(true)}
                     disabled={isLoading}
                   >
                     MORE INFO
                   </button>
+
+                  <button
+                    type="button"
+                    className="admin-btn-resolve"
+                    onClick={() => setIsConfirmingResolve(true)}
+                    disabled={isLoading}
+                  >
+                    RESOLVE TICKET
+                  </button>
                 </>
+              ) : isConfirmingResolve ? (
+                <div className="admin-more-info-form" style={{ borderColor: 'var(--soft-gray)' }}>
+                  <label className="admin-meta-label">
+                    RESOLVE THIS TICKET?
+                  </label>
+                  <div className="admin-form-actions">
+                    <button
+                      type="button"
+                      className="admin-btn-cancel"
+                      onClick={() => setIsConfirmingResolve(false)}
+                      disabled={isLoading}
+                    >
+                      CANCEL
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn-submit-info"
+                      style={{ backgroundColor: 'var(--soft-gray)', borderColor: 'var(--soft-gray)', color: 'var(--text-light)' }}
+                      onClick={() => handleResolve(selectedTicket)}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'RESOLVING...' : 'RESOLVE TICKET'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="admin-more-info-form">
                   <label
@@ -625,11 +697,7 @@ function AdminPortal({
                     className="admin-more-info-textarea"
                     rows="3"
                     value={moreInfoText}
-                    onChange={(e) =>
-                      setMoreInfoText(
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => setMoreInfoText(e.target.value)}
                     placeholder="Specify what details are missing from the customer request..."
                     disabled={isLoading}
                   />
@@ -639,9 +707,7 @@ function AdminPortal({
                       type="button"
                       className="admin-btn-cancel"
                       onClick={() => {
-                        setIsRequestingMoreInfo(
-                          false
-                        )
+                        setIsRequestingMoreInfo(false)
                         setMoreInfoText('')
                         setError('')
                       }}
@@ -653,16 +719,10 @@ function AdminPortal({
                     <button
                       type="button"
                       className="admin-btn-submit-info"
-                      onClick={() =>
-                        handleMoreInfoSubmit(
-                          selectedTicket
-                        )
-                      }
+                      onClick={() => handleMoreInfoSubmit(selectedTicket)}
                       disabled={isLoading}
                     >
-                      {isLoading
-                        ? 'SENDING...'
-                        : 'SEND REQUEST'}
+                      {isLoading ? 'SENDING...' : 'SEND REQUEST'}
                     </button>
                   </div>
                 </div>
@@ -763,6 +823,29 @@ function AdminPortal({
           MORE INFO
           <span className="tab-badge badge-more-info">
             {moreInfoCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-tab ${
+            activeTab === 'RESOLVED'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() => {
+            setActiveTab('RESOLVED')
+            setError('')
+          }}
+          aria-current={
+            activeTab === 'RESOLVED'
+              ? 'page'
+              : undefined
+          }
+        >
+          RESOLVED
+          <span className="tab-badge badge-resolved">
+            {resolvedCount}
           </span>
         </button>
 

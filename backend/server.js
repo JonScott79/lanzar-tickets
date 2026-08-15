@@ -134,6 +134,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'LANZAR Tickets Backend' })
 })
 
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'LANZAR Tickets Backend' })
+})
+
 // Create Customer Account (Firebase Auth + Firestore Profile)
 app.post('/api/customers', authenticateAdmin, async (req, res) => {
   const { name, email, password, services } = req.body
@@ -262,6 +266,8 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
     return res.status(400).json({ error: 'Ticket ID is required' })
   }
 
+  console.log(`[EMAIL] New ticket notification requested for ticket: ${ticketId} by user: ${req.user.email} (UID: ${req.user.uid})`)
+
   try {
     const ticketRef = db.collection('tickets').doc(ticketId)
     const ticketDoc = await ticketRef.get()
@@ -280,12 +286,18 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
 
     // Check if notification email has already been sent to prevent duplicates
     if (ticketData.notificationSent === true) {
-      console.log(`[BACKEND] Notification email already sent for ${ticketId}. Skipping.`)
+      console.log(`[EMAIL] Notification email already sent for ${ticketId}. Skipping.`)
       return res.json({ success: true, alreadySent: true })
     }
 
-    // Send email (does not throw on failure, keeping ticket persisted)
-    await sendNewTicketNotification(ticketData)
+    console.log(`[EMAIL] Attempting provider email request for ticket: ${ticketId}`)
+    const info = await sendNewTicketNotification(ticketData)
+
+    if (info && info.messageId) {
+      console.log(`[EMAIL] Provider accepted message for ${ticketId}. Message ID: ${info.messageId}`)
+    } else {
+      console.warn(`[EMAIL WARN] Provider request completed but no Message ID was returned for ${ticketId}`)
+    }
 
     // Mark as sent
     await ticketRef.update({
@@ -404,6 +416,21 @@ app.post('/api/inbound-email', async (req, res) => {
     }
 
     const ticket = ticketDoc.data()
+
+    // 2b. Block replies to resolved tickets
+    if (ticket.status === 'RESOLVED') {
+      console.log(`[INBOUND] Reply received for resolved ticket: ${ticketNumber}. Skipping update.`)
+      
+      // Mark Message ID as processed to prevent infinite webhook retries
+      const processedRef = db.collection('processed_emails').doc(MessageID)
+      await processedRef.set({
+        processedAt: FieldValue.serverTimestamp(),
+        ticketNumber: ticketNumber,
+        resolvedSkip: true
+      })
+      
+      return res.json({ success: true, message: 'Ticket is resolved. Reply ignored.' })
+    }
 
     // 3. Idempotency Check (Duplicate message protection)
     const processedRef = db.collection('processed_emails').doc(MessageID)

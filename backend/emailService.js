@@ -136,12 +136,13 @@ ${adminLink}
 
   try {
     const mailTransporter = await getTransporter()
+    console.log(`[EMAIL] Provider request sent for ticket: ${ticket.ticketNumber} to recipient: ${notificationEmail}`)
     const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] New ticket notification sent for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
+    console.log(`[EMAIL] Provider accepted message for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
     logPreviewUrl(info)
     return info
   } catch (error) {
-    console.error(`[EMAIL ERROR] Failed to send new ticket notification for ${ticket.ticketNumber}:`, error.message)
+    console.error(`[EMAIL ERROR] Provider request failed for ${ticket.ticketNumber}:`, error.message)
     // Do not throw the error; satisfy the requirement "THE TICKET MUST REMAIN CREATED"
   }
 }
