@@ -91,6 +91,7 @@ export async function createTicket(
       // 4. Set the ticket details
       const ticketData = {
         ticketNumber,
+        accountId: customer.accountId || null,
         customerId: customer.id,
         customerEmail: customer.customerEmail,
         customerName:

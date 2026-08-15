@@ -9,11 +9,36 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
     }
 
-    // Customer registry profiles
+    // Customer registry profiles (legacy — retained for backward compatibility)
     match /customers/{customerId} {
       allow read: if request.auth != null && 
         (request.auth.uid == customerId || isAdmin());
       allow write: if isAdmin();
+    }
+
+    // User profiles (new multi-tenant model)
+    match /users/{userId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Account organization profiles
+    match /accounts/{accountId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+
+      // Location subcollections
+      match /locations/{locationId} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
+
+      // Asset subcollections
+      match /assets/{assetId} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
     }
 
     // Administrator registry

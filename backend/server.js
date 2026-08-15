@@ -228,8 +228,9 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Failed to create authentication credentials: ' + createAuthError.message })
     }
 
-    // 4. Write customer profile to Firestore
+    // 4. Write customer profile to Firestore (both legacy and new collections)
     try {
+      // Write to legacy customers collection (backward compatibility)
       await db.collection('customers').doc(authUser.uid).set({
         customerId: authUser.uid,
         customerName: name.trim(),
@@ -241,6 +242,31 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
         createdAt: FieldValue.serverTimestamp()
       })
       console.log(`[BACKEND] Firestore customer record created for: ${normalizedEmail}`)
+
+      // Resolve account for the new users collection
+      let accountId = req.body.accountId || null
+      if (!accountId) {
+        // Default to the first active account if none specified
+        const accountQuery = await db.collection('accounts')
+          .where('active', '==', true)
+          .limit(1)
+          .get()
+
+        if (!accountQuery.empty) {
+          accountId = accountQuery.docs[0].id
+        }
+      }
+
+      // Write to new users collection
+      await db.collection('users').doc(authUser.uid).set({
+        accountId: accountId,
+        displayName: name.trim(),
+        email: normalizedEmail,
+        role: 'USER',
+        active: true,
+        createdAt: FieldValue.serverTimestamp()
+      })
+      console.log(`[BACKEND] Firestore user record created for: ${normalizedEmail} (accountId: ${accountId})`)
     } catch (firestoreError) {
       console.error('[BACKEND ERROR] Firestore write failed, rolling back Firebase Auth user...', firestoreError)
       try {
@@ -331,20 +357,37 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
       return res.json({ success: true, alreadySent: true })
     }
 
-    // Resolve customer email address from customers collection in Firestore
+    // Resolve customer email address — try users/ first, fall back to customers/
     let customerEmail = ticketData.customerEmail
     let customerName = ticketData.customerName
 
     if (ticketData.customerId) {
       try {
-        const customerDoc = await db.collection('customers').doc(ticketData.customerId).get()
-        if (customerDoc.exists) {
-          const customerData = customerDoc.data()
-          if (customerData.customerEmail) {
-            customerEmail = customerData.customerEmail
+        // Try the new users collection first
+        let resolved = false
+        const userDoc = await db.collection('users').doc(ticketData.customerId).get()
+        if (userDoc.exists) {
+          const userData = userDoc.data()
+          if (userData.email) {
+            customerEmail = userData.email
           }
-          if (customerData.displayName) {
-            customerName = customerData.displayName
+          if (userData.displayName) {
+            customerName = userData.displayName
+          }
+          resolved = true
+        }
+
+        // Fall back to legacy customers collection
+        if (!resolved) {
+          const customerDoc = await db.collection('customers').doc(ticketData.customerId).get()
+          if (customerDoc.exists) {
+            const customerData = customerDoc.data()
+            if (customerData.customerEmail) {
+              customerEmail = customerData.customerEmail
+            }
+            if (customerData.displayName) {
+              customerName = customerData.displayName
+            }
           }
         }
       } catch (custErr) {
