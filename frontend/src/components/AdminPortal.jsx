@@ -34,6 +34,7 @@ import {
   arrayUnion,
   setDoc,
   deleteDoc,
+  getDocs,
 } from 'firebase/firestore'
 
 import app from '../firebase/config.js'
@@ -104,6 +105,8 @@ function AdminPortal({
   // ========================================================
 
   const [customers, setCustomers] = useState([])
+  const [availableAccounts, setAvailableAccounts] = useState([])
+  const [selectedAccountId, setSelectedAccountId] = useState('')
   const [custName, setCustName] = useState('')
   const [custEmail, setCustEmail] = useState('')
   const [custPassword, setCustPassword] = useState('')
@@ -117,11 +120,33 @@ function AdminPortal({
   const [customerSuccess, setCustomerSuccess] = useState('')
 
   // ========================================================
-  // Real-Time Customer Sync
+  // Real-Time Customer & Accounts Sync
   // ========================================================
 
   useEffect(() => {
     if (activeTab !== 'customers') return
+
+    // Fetch accounts for selector
+    const fetchAccounts = async () => {
+      try {
+        const qAcc = query(collection(db, 'accounts'), orderBy('name', 'asc'))
+        const snapshotAcc = await getDocs(qAcc)
+        const listAcc = []
+        snapshotAcc.forEach((docSnap) => {
+          if (docSnap.data().active === true) {
+            listAcc.push({ id: docSnap.id, ...docSnap.data() })
+          }
+        })
+        setAvailableAccounts(listAcc)
+        if (listAcc.length > 0 && !selectedAccountId) {
+          setSelectedAccountId(listAcc[0].id)
+        }
+      } catch (err) {
+        console.error('Error fetching accounts for selector:', err)
+      }
+    }
+
+    fetchAccounts()
 
     const q = query(
       collection(db, 'customers'),
@@ -147,7 +172,7 @@ function AdminPortal({
     )
 
     return () => unsubscribe()
-  }, [activeTab])
+  }, [activeTab, selectedAccountId])
 
   // ========================================================
   // Customer Actions
@@ -158,6 +183,10 @@ function AdminPortal({
     setCustomerError('')
     setCustomerSuccess('')
 
+    if (!selectedAccountId) {
+      setCustomerError('Customer Account selection is required.')
+      return
+    }
     if (!custName.trim()) {
       setCustomerError('Customer Name is required.')
       return
@@ -190,6 +219,7 @@ function AdminPortal({
           'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
+          accountId: selectedAccountId,
           name: custName.trim(),
           email: custEmail.trim(),
           password: custPassword,
@@ -941,6 +971,25 @@ function AdminPortal({
             )}
 
             <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label className="admin-meta-label">CUSTOMER ACCOUNT *</label>
+                <select
+                  className="admin-more-info-textarea"
+                  style={{ resize: 'none', height: '42px', padding: '10px', backgroundColor: 'var(--card-bg)', color: 'var(--text-color)' }}
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  disabled={isLoading}
+                  required
+                >
+                  <option value="" disabled>Select an account</option>
+                  {availableAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.shortName || acc.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label className="admin-meta-label">FULL NAME</label>
                 <input

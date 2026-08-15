@@ -176,7 +176,7 @@ app.get('/api/health', (req, res) => {
 
 // Create Customer Account (Firebase Auth + Firestore Profile)
 app.post('/api/customers', authenticateAdmin, async (req, res) => {
-  const { name, email, password, services } = req.body
+  const { name, email, password, services, accountId } = req.body
 
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Customer Name is required.' })
@@ -190,10 +190,20 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
   if (!Array.isArray(services) || services.length === 0) {
     return res.status(400).json({ error: 'At least one authorized service must be selected.' })
   }
+  if (!accountId || !accountId.trim()) {
+    return res.status(400).json({ error: 'Customer Account selection is required.' })
+  }
 
   const normalizedEmail = email.trim().toLowerCase()
+  const targetAccountId = accountId.trim()
 
   try {
+    // 0. Verify selected account exists and is active
+    const accountDoc = await db.collection('accounts').doc(targetAccountId).get()
+    if (!accountDoc.exists || accountDoc.data().active !== true) {
+      return res.status(400).json({ error: 'Selected account does not exist or is inactive.' })
+    }
+
     // 1. Check if customer document already exists in Firestore
     const existingDocQuery = await db.collection('customers')
       .where('customerEmail', '==', normalizedEmail)
@@ -243,30 +253,16 @@ app.post('/api/customers', authenticateAdmin, async (req, res) => {
       })
       console.log(`[BACKEND] Firestore customer record created for: ${normalizedEmail}`)
 
-      // Resolve account for the new users collection
-      let accountId = req.body.accountId || null
-      if (!accountId) {
-        // Default to the first active account if none specified
-        const accountQuery = await db.collection('accounts')
-          .where('active', '==', true)
-          .limit(1)
-          .get()
-
-        if (!accountQuery.empty) {
-          accountId = accountQuery.docs[0].id
-        }
-      }
-
-      // Write to new users collection
+      // Write to new users collection with explicit accountId
       await db.collection('users').doc(authUser.uid).set({
-        accountId: accountId,
+        accountId: targetAccountId,
         displayName: name.trim(),
         email: normalizedEmail,
         role: 'USER',
         active: true,
         createdAt: FieldValue.serverTimestamp()
       })
-      console.log(`[BACKEND] Firestore user record created for: ${normalizedEmail} (accountId: ${accountId})`)
+      console.log(`[BACKEND] Firestore user record created for: ${normalizedEmail} (accountId: ${targetAccountId})`)
     } catch (firestoreError) {
       console.error('[BACKEND ERROR] Firestore write failed, rolling back Firebase Auth user...', firestoreError)
       try {
