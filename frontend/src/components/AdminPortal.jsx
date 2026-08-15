@@ -44,6 +44,7 @@ import { auth, sendPasswordReset } from '../firebase/auth.js'
 // ==========================
 
 const db = getFirestore(app)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 function AdminPortal({
   onTicketSelect,
@@ -181,7 +182,7 @@ function AdminPortal({
     setIsLoading(true)
     try {
       const idToken = await auth.currentUser.getIdToken()
-      const response = await fetch('http://localhost:3001/api/customers', {
+      const response = await fetch(`${API_BASE_URL}/api/customers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -368,7 +369,7 @@ function AdminPortal({
       // Trigger More Info Email notification via backend
       try {
         const idToken = await currentUser.getIdToken()
-        await fetch(`http://localhost:3001/api/tickets/${ticket.id}/more-info-email`, {
+        await fetch(`${API_BASE_URL}/api/tickets/${ticket.id}/more-info-email`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

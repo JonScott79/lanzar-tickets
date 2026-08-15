@@ -19,6 +19,7 @@
 import { useState } from 'react'
 import { auth } from '../firebase/auth.js'
 import { createTicket, getProposedTicketNumber } from '../firebase/tickets.js'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 // ==========================
 // Service Configuration
@@ -221,7 +222,7 @@ function TicketDetails({
       // Trigger new ticket email notification via backend
       try {
         const idToken = await auth.currentUser.getIdToken()
-        await fetch('http://localhost:3001/api/tickets/notify', {
+        await fetch(`${API_BASE_URL}/api/tickets/notify`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

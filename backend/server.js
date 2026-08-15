@@ -38,9 +38,13 @@ dotenv.config()
 
 const app = express()
 
-// Allow CORS from Vite dev servers (defaults to 5173/5174)
+// Allow CORS from production domain and local Vite dev servers
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: [
+    'https://tickets.lanzar.me',
+    'http://localhost:5173',
+    'http://localhost:5174'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
