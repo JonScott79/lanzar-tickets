@@ -90,13 +90,28 @@ export async function sendNewTicketNotification(ticket) {
   const customerName = ticket?.customerName || 'Unknown Customer'
   const ticketNumber = ticket?.ticketNumber || ticket?.id || 'N/A'
   const category = ticket?.category || ticket?.service || 'N/A'
-  const adminLink = `https://tickets.lanzar.me/?ticketId=${ticketNumber}`
+  const issueType = ticket?.issueType ? ` -> ${ticket.issueType}` : ''
+  const assetName = ticket?.assetName ? `\nAsset: ${ticket.assetName}` : ''
+  const locationName = ticket?.locationName ? `\nLocation: ${ticket.locationName}` : ''
+  
+  let answersSummary = ''
+  if (ticket?.answers && Object.keys(ticket.answers).length > 0) {
+    answersSummary = '\nDiagnostic Answers:\n' + Object.entries(ticket.answers)
+      .map(([k, v]) => `  - ${k}: ${v}`)
+      .join('\n')
+  }
 
+  const adminLink = `https://tickets.lanzar.me/?ticketId=${ticketNumber}`
   const subject = `New LANZAR Support Ticket #${ticketNumber}`
+
   const textBody = `You got a new support ticket from ${customerName}.
 
 Ticket: #${ticketNumber}
-Subject: ${category}
+Service: ${(ticket?.service || 'IT').toUpperCase()}
+Category: ${category}${issueType}${assetName}${locationName}${answersSummary}
+
+Description:
+${ticket?.description || 'N/A'}
 
 Open in LANZAR Tickets admin portal:
 ${adminLink}`
@@ -121,6 +136,8 @@ export async function sendCustomerConfirmation(ticket) {
   const ticketNumber = ticket?.ticketNumber || ticket?.id || 'N/A'
   const service = ticket?.service || 'N/A'
   const category = ticket?.category || 'N/A'
+  const issueType = ticket?.issueType ? ` (${ticket.issueType})` : ''
+  const assetName = ticket?.assetName ? `\n- Asset: ${ticket.assetName}` : ''
   const description = ticket?.description || 'No description provided.'
   const customerEmail = ticket?.customerEmail
 
@@ -135,9 +152,9 @@ export async function sendCustomerConfirmation(ticket) {
 
 We have received your support ticket #${ticketNumber}.
 
-Basic Ticket Information:
+Ticket Information:
 - Service: ${service.toUpperCase()}
-- Category: ${category}
+- Category: ${category}${issueType}${assetName}
 - Description: ${description}
 
 If you need to provide additional details or follow up, please email our support representative directly at jon@lanzar.me by clicking the link below:

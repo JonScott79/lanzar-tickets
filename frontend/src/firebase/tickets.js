@@ -35,7 +35,8 @@ export async function createTicket(
   customer,
   user,
   problemType,
-  description
+  description,
+  structuredData = {}
 ) {
   if (
     !selectedService ||
@@ -92,15 +93,25 @@ export async function createTicket(
       const ticketData = {
         ticketNumber,
         accountId: customer.accountId || null,
+        userId: customer.id,
+        userName: customer.displayName || 'Unknown Customer',
+        userEmail: customer.customerEmail || user.email,
+        // Legacy compatibility fields
         customerId: customer.id,
-        customerEmail: customer.customerEmail,
-        customerName:
-          customer.displayName ||
-          'Jon Scott',
+        customerEmail: customer.customerEmail || user.email,
+        customerName: customer.displayName || 'Unknown Customer',
         authEmail: user.email,
         authUid: user.uid,
         service: selectedService,
         category: problemType,
+        // New structured fields
+        subcategory: structuredData.issueType || structuredData.subcategory || null,
+        issueType: structuredData.issueType || structuredData.subcategory || null,
+        locationId: structuredData.locationId || null,
+        locationName: structuredData.locationName || null,
+        assetId: structuredData.assetId || null,
+        assetName: structuredData.assetName || null,
+        answers: structuredData.answers || {},
         description: description,
         status: 'PENDING',
         createdAt: serverTimestamp(),

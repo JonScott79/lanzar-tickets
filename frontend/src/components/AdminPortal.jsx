@@ -552,6 +552,42 @@ function AdminPortal({
               </strong>
             </div>
 
+            {selectedTicket.issueType && (
+              <div className="admin-meta-item">
+                <span className="admin-meta-label">
+                  SPECIFIC ISSUE
+                </span>
+
+                <strong>
+                  {selectedTicket.issueType}
+                </strong>
+              </div>
+            )}
+
+            {selectedTicket.locationName && (
+              <div className="admin-meta-item">
+                <span className="admin-meta-label">
+                  LOCATION
+                </span>
+
+                <strong>
+                  {selectedTicket.locationName}
+                </strong>
+              </div>
+            )}
+
+            {selectedTicket.assetName && (
+              <div className="admin-meta-item">
+                <span className="admin-meta-label">
+                  AFFECTED ASSET
+                </span>
+
+                <strong>
+                  {selectedTicket.assetName}
+                </strong>
+              </div>
+            )}
+
             <div className="admin-meta-item">
               <span className="admin-meta-label">
                 SUBMITTED AT
@@ -564,6 +600,26 @@ function AdminPortal({
               </span>
             </div>
           </div>
+
+          {/* Structured Answers Section */}
+          {selectedTicket.answers && Object.keys(selectedTicket.answers).length > 0 && (
+            <div className="admin-detail-section" style={{ background: 'var(--soft-card-bg)', padding: '14px', borderRadius: '4px', borderLeft: '3px solid var(--retro-teal)' }}>
+              <span className="admin-meta-label" style={{ color: 'var(--retro-teal)', marginBottom: '8px' }}>
+                DIAGNOSTIC ANSWERS
+              </span>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+                {Object.entries(selectedTicket.answers).map(([key, val]) => (
+                  <div key={key} style={{ fontSize: '0.85rem' }}>
+                    <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--soft-gray)', textTransform: 'uppercase' }}>
+                      {key.replace(/([A-Z])/g, ' $1')}
+                    </span>
+                    <strong>{String(val)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="admin-detail-section">
             <span className="admin-meta-label">
