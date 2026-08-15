@@ -16,6 +16,11 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
+if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+  console.log('[EMAIL] SMTP configuration missing')
+  console.log('[EMAIL] Email delivery unavailable until production SMTP variables are configured')
+}
+
 let transporter = null
 
 /**
@@ -41,31 +46,43 @@ async function getTransporter() {
     })
     console.log(`[EMAIL] SMTP Transporter initialized using configured user: ${user}`)
   } else {
-    console.log('[EMAIL] No SMTP credentials provided. Creating temporary Ethereal test account...')
-    try {
-      const testAccount = await nodemailer.createTestAccount()
-      transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass
-        }
-      })
-      console.log(`[EMAIL] Temporary Ethereal account created:`)
-      console.log(`  User: ${testAccount.user}`)
-      console.log(`  Pass: [Generated Pass]`)
-    } catch (err) {
-      console.error('[EMAIL ERROR] Failed to create Ethereal test account, falling back to mock transporter:', err.message)
-      // Mock fallback so we don't throw
+    // If running in production (or on Railway), do not spin up Ethereal mail dynamically!
+    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      console.warn('[EMAIL] SMTP configuration missing')
+      console.warn('[EMAIL] Email delivery unavailable until production SMTP variables are configured')
       transporter = {
         sendMail: async (options) => {
-          console.log(`[EMAIL MOCK] Mock send (no SMTP configured):`)
-          console.log(`  From: ${options.from}`)
-          console.log(`  To: ${options.to}`)
-          console.log(`  Subject: ${options.subject}`)
-          return { messageId: 'mock-id-' + Date.now() }
+          console.warn(`[EMAIL WARN] Email send attempted but SMTP is not configured. Recipient: ${options.to}`)
+          throw new Error('SMTP configuration missing. Email delivery unavailable.')
+        }
+      }
+    } else {
+      console.log('[EMAIL] No SMTP credentials provided. Creating temporary Ethereal test account...')
+      try {
+        const testAccount = await nodemailer.createTestAccount()
+        transporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass
+          }
+        })
+        console.log(`[EMAIL] Temporary Ethereal account created:`)
+        console.log(`  User: ${testAccount.user}`)
+        console.log(`  Pass: [Generated Pass]`)
+      } catch (err) {
+        console.error('[EMAIL ERROR] Failed to create Ethereal test account, falling back to mock transporter:', err.message)
+        // Mock fallback so we don't throw
+        transporter = {
+          sendMail: async (options) => {
+            console.log(`[EMAIL MOCK] Mock send (no SMTP configured):`)
+            console.log(`  From: ${options.from}`)
+            console.log(`  To: ${options.to}`)
+            console.log(`  Subject: ${options.subject}`)
+            return { messageId: 'mock-id-' + Date.now() }
+          }
         }
       }
     }

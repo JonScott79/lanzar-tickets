@@ -55,14 +55,34 @@ app.use(express.json())
 // Firebase Admin SDK Config
 // =====================================
 
-const credentialPath = 'C:\\Projects\\LANZAR\\firebase-credentials\\lanzar-95ae3-firebase-adminsdk-fbsvc-86e8ea5817.json'
+let serviceAccount = null
+let serviceAccountProjectId = null
 
-if (!fs.existsSync(credentialPath)) {
-  console.error(`[BACKEND ERROR] Firebase service account file not found at: ${credentialPath}`)
-  process.exit(1)
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    serviceAccountProjectId = serviceAccount.project_id
+    console.log('[BACKEND] Initializing Firebase Admin via FIREBASE_SERVICE_ACCOUNT environment variable')
+  } catch (parseErr) {
+    console.error('[BACKEND ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:', parseErr.message)
+    process.exit(1)
+  }
+} else {
+  const credentialPath = 'C:\\Projects\\LANZAR\\firebase-credentials\\lanzar-95ae3-firebase-adminsdk-fbsvc-86e8ea5817.json'
+  if (fs.existsSync(credentialPath)) {
+    try {
+      serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8'))
+      serviceAccountProjectId = serviceAccount.project_id
+      console.log('[BACKEND] Initializing Firebase Admin via local credentials file')
+    } catch (readErr) {
+      console.error('[BACKEND ERROR] Failed to read/parse local credentials file:', readErr.message)
+      process.exit(1)
+    }
+  } else {
+    console.error(`[BACKEND ERROR] Firebase service credentials not found. Set FIREBASE_SERVICE_ACCOUNT env var or place file at: ${credentialPath}`)
+    process.exit(1)
+  }
 }
-
-const serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8'))
 
 const adminApp = getApps().length > 0
   ? getApps()[0]
@@ -73,7 +93,7 @@ const adminApp = getApps().length > 0
 const auth = getAuth(adminApp)
 const db = getFirestore(adminApp)
 
-console.log('[BACKEND] Connected to Firebase Project:', serviceAccount.project_id)
+console.log('[BACKEND] Connected to Firebase Project:', serviceAccountProjectId)
 
 // =====================================
 // Middleware: Admin Authorization
