@@ -95,10 +95,36 @@ function TicketDetails({
   // Active Category Object
   const currentCategory = serviceTree.categories.find(c => c.id === selectedCategoryId)
 
-  // Filtered Assets for Selected Category
+  // Context-Sensitive Asset Label Helper
+  const getAssetQuestionLabel = () => {
+    if (!currentCategory) return 'WHICH AFFECTED ASSET?'
+    const catId = currentCategory.id?.toLowerCase() || ''
+    const filters = currentCategory.assetTypeFilter || []
+    if (catId === 'computer' || filters.includes('workstation')) {
+      return 'WHICH WORKSTATION?'
+    }
+    if (catId === 'server' || filters.includes('server')) {
+      return 'WHICH SERVER?'
+    }
+    if (catId === 'network' || filters.includes('network') || filters.includes('switch') || filters.includes('router')) {
+      return 'WHICH NETWORK DEVICE?'
+    }
+    return currentCategory.assetLabel || 'WHICH AFFECTED ASSET?'
+  }
+
+  // Location & Category Filtered Assets
   const filteredAssets = accountAssets.filter(asset => {
-    if (!currentCategory?.assetTypeFilter) return true
-    return currentCategory.assetTypeFilter.includes(asset.type?.toLowerCase())
+    // 1. Location match: Asset must belong to selected location if location is selected
+    if (selectedLocationId && asset.locationId && asset.locationId !== selectedLocationId) {
+      return false
+    }
+    // 2. Asset Type Filter match
+    if (currentCategory?.assetTypeFilter?.length > 0) {
+      if (!asset.type || !currentCategory.assetTypeFilter.includes(asset.type.toLowerCase())) {
+        return false
+      }
+    }
+    return true
   })
 
   // Active Issue Type Object
@@ -133,6 +159,14 @@ function TicketDetails({
     setError('')
   }
 
+  const handleLocationChange = (locId) => {
+    setSelectedLocationId(locId)
+    // Clear asset selection whenever location changes
+    setSelectedAssetId('')
+    setManualAssetName('')
+    setError('')
+  }
+
   const handleIssueTypeChange = (issueId) => {
     setSelectedIssueTypeId(issueId)
     setAnswers({})
@@ -151,6 +185,11 @@ function TicketDetails({
 
     if (!selectedCategoryId) {
       setError('Please select a problem category.')
+      return
+    }
+
+    if (accountLocations.length > 0 && !selectedLocationId) {
+      setError('Please select your location.')
       return
     }
 
@@ -322,11 +361,37 @@ function TicketDetails({
             ))}
           </select>
 
-          {/* 2. Asset Selector (if category supports assets or assets exist) */}
-          {selectedCategoryId && currentCategory?.requireAsset && (
+          {/* 2. Location Selector (LOCATION FIRST!) */}
+          {selectedCategoryId && accountLocations.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <label className="ticket-field-label" htmlFor="ticket-location">
+                WHICH LOCATION? *
+              </label>
+              <select
+                id="ticket-location"
+                className="ticket-select"
+                value={selectedLocationId}
+                onChange={(e) => handleLocationChange(e.target.value)}
+                required
+                aria-required="true"
+              >
+                <option value="" disabled>
+                  Select location
+                </option>
+                {accountLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 3. Asset Selector (AFTER LOCATION) */}
+          {selectedCategoryId && currentCategory?.requireAsset && (selectedLocationId || accountLocations.length === 0) && (
             <div style={{ marginTop: '16px' }}>
               <label className="ticket-field-label" htmlFor="ticket-asset">
-                {currentCategory.assetLabel || 'WHICH DEVICE OR ASSET?'}
+                {getAssetQuestionLabel()}
               </label>
               {filteredAssets.length > 0 ? (
                 <select
@@ -352,28 +417,6 @@ function TicketDetails({
                   onChange={(e) => setManualAssetName(e.target.value)}
                 />
               )}
-            </div>
-          )}
-
-          {/* 3. Location Selector (if customer has multiple locations) */}
-          {selectedCategoryId && accountLocations.length > 1 && (
-            <div style={{ marginTop: '16px' }}>
-              <label className="ticket-field-label" htmlFor="ticket-location">
-                WHICH LOCATION?
-              </label>
-              <select
-                id="ticket-location"
-                className="ticket-select"
-                value={selectedLocationId}
-                onChange={(e) => setSelectedLocationId(e.target.value)}
-              >
-                <option value="">Select location (optional)</option>
-                {accountLocations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
             </div>
           )}
 

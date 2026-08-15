@@ -372,23 +372,35 @@ function AdminPortal({
     }
   }
 
-  const handleCustomerDelete = async (uid, name) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to revoke access for customer "${name}"?`
-      )
-    ) {
+  const handleToggleUserStatus = async (user, activeState) => {
+    const name = user.displayName || user.customerName || user.email || 'User'
+    const actionText = activeState ? 're-enable access for' : 'revoke access for'
+    if (!window.confirm(`Are you sure you want to ${actionText} user "${name}"?`)) {
       return
     }
     setCustomerError('')
     setCustomerSuccess('')
     setIsLoading(true)
     try {
-      await deleteDoc(doc(db, 'customers', uid))
-      setCustomerSuccess(`Access revoked for customer "${name}".`)
+      const idToken = await auth.currentUser.getIdToken()
+      const response = await fetch(`${API_BASE_URL}/api/customers/${user.id}/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ active: activeState })
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update user status.')
+      }
+
+      setCustomerSuccess(result.message || `Status updated for "${name}".`)
     } catch (err) {
-      console.error('Error deleting customer:', err)
-      setCustomerError('Failed to revoke access: ' + err.message)
+      console.error('Error toggling user status:', err)
+      setCustomerError('Failed to update user status: ' + err.message)
     } finally {
       setIsLoading(false)
     }
@@ -1394,9 +1406,14 @@ function AdminPortal({
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {accUsers.map((user) => (
-                                  <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '10px 14px', borderRadius: '4px', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '8px' }}>
+                                  <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: user.active === false ? 'rgba(255, 100, 100, 0.08)' : 'rgba(255, 255, 255, 0.05)', padding: '10px 14px', borderRadius: '4px', border: user.active === false ? '1px solid var(--rocket-orange)' : '1px solid var(--border-color)', flexWrap: 'wrap', gap: '8px' }}>
                                     <div>
-                                      <strong style={{ fontSize: '0.88rem', color: 'var(--deep-navy)' }}>{user.displayName || user.customerName || 'User'}</strong>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <strong style={{ fontSize: '0.88rem', color: 'var(--deep-navy)' }}>{user.displayName || user.customerName || 'User'}</strong>
+                                        <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '3px', fontWeight: 'bold', backgroundColor: user.active === false ? 'rgba(255, 120, 80, 0.2)' : 'rgba(42, 114, 143, 0.2)', color: user.active === false ? 'var(--rocket-orange)' : 'var(--retro-teal)' }}>
+                                          {user.active === false ? 'REVOKED' : 'ACTIVE'}
+                                        </span>
+                                      </div>
                                       <div style={{ fontSize: '0.78rem', color: 'var(--soft-gray)' }}>{user.email || user.customerEmail}</div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1405,7 +1422,7 @@ function AdminPortal({
                                         className="admin-card-view-btn"
                                         style={{ fontSize: '0.7rem', padding: '4px 10px' }}
                                         onClick={() => handleSendWelcomeEmail(user)}
-                                        disabled={isLoading}
+                                        disabled={isLoading || user.active === false}
                                       >
                                         SEND WELCOME
                                       </button>
@@ -1414,19 +1431,31 @@ function AdminPortal({
                                         className="admin-card-view-btn"
                                         style={{ fontSize: '0.7rem', padding: '4px 10px' }}
                                         onClick={() => handleSendPasswordReset(user.email || user.customerEmail, user.displayName || user.customerName)}
-                                        disabled={isLoading}
+                                        disabled={isLoading || user.active === false}
                                       >
                                         SEND RESET
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="admin-card-view-btn"
-                                        style={{ borderColor: 'var(--rocket-orange)', color: 'var(--rocket-orange)', fontSize: '0.7rem', padding: '4px 10px' }}
-                                        onClick={() => handleCustomerDelete(user.id, user.displayName || user.customerName)}
-                                        disabled={isLoading}
-                                      >
-                                        REVOKE
-                                      </button>
+                                      {user.active === false ? (
+                                        <button
+                                          type="button"
+                                          className="admin-card-view-btn"
+                                          style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', fontSize: '0.7rem', padding: '4px 10px' }}
+                                          onClick={() => handleToggleUserStatus(user, true)}
+                                          disabled={isLoading}
+                                        >
+                                          RE-ENABLE
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="admin-card-view-btn"
+                                          style={{ borderColor: 'var(--rocket-orange)', color: 'var(--rocket-orange)', fontSize: '0.7rem', padding: '4px 10px' }}
+                                          onClick={() => handleToggleUserStatus(user, false)}
+                                          disabled={isLoading}
+                                        >
+                                          REVOKE
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}

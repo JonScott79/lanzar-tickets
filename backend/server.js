@@ -441,6 +441,62 @@ app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res
   }
 })
 
+// Update Customer Active / Revoked Status (Revoke or Re-enable access)
+app.post('/api/customers/:uid/status', authenticateAdmin, async (req, res) => {
+  const { uid } = req.params
+  const { active } = req.body
+
+  if (typeof active !== 'boolean') {
+    return res.status(400).json({ error: 'Field "active" (boolean) is required.' })
+  }
+
+  try {
+    // 1. Update users/{uid} document in Firestore
+    const userRef = db.collection('users').doc(uid)
+    const userDoc = await userRef.get()
+
+    let userName = 'User'
+    if (userDoc.exists) {
+      userName = userDoc.data().displayName || userDoc.data().email || userName
+      await userRef.update({
+        active: active,
+        updatedAt: FieldValue.serverTimestamp()
+      })
+    }
+
+    // 2. Update legacy customers/{uid} document if present
+    const custRef = db.collection('customers').doc(uid)
+    const custDoc = await custRef.get()
+    if (custDoc.exists) {
+      userName = custDoc.data().customerName || custDoc.data().displayName || userName
+      await custRef.update({
+        active: active,
+        updatedAt: FieldValue.serverTimestamp()
+      })
+    }
+
+    // 3. Update Firebase Auth user (disabled = !active)
+    try {
+      await auth.updateUser(uid, { disabled: !active })
+      console.log(`[BACKEND] Firebase Auth status updated for ${uid}: disabled = ${!active}`)
+    } catch (authErr) {
+      console.warn(`[BACKEND WARN] Firebase Auth status update failed for ${uid}:`, authErr.message)
+    }
+
+    console.log(`[BACKEND] User ${uid} ("${userName}") active status set to: ${active}`)
+    return res.json({
+      success: true,
+      active: active,
+      message: active
+        ? `Access restored for user "${userName}".`
+        : `Access revoked for user "${userName}". Account disabled.`
+    })
+  } catch (error) {
+    console.error(`[BACKEND ERROR] Status update failed for user ${uid}:`, error)
+    return res.status(500).json({ error: 'Failed to update user status: ' + error.message })
+  }
+})
+
 // Update Customer Services (Admin authorized update)
 app.post('/api/customers/:uid/services', authenticateAdmin, async (req, res) => {
   const { uid } = req.params
