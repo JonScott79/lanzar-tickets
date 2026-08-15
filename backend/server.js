@@ -331,20 +331,51 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
       return res.json({ success: true, alreadySent: true })
     }
 
-    console.log(`[EMAIL] Attempting provider email requests for ticket: ${ticketId}`)
-    const adminInfo = await sendNewTicketNotification(ticketData)
-    const customerInfo = await sendCustomerConfirmation(ticketData)
+    // Resolve customer email address from customers collection in Firestore
+    let customerEmail = ticketData.customerEmail
+    let customerName = ticketData.customerName
 
-    if (adminInfo && adminInfo.messageId) {
-      console.log(`[EMAIL] Provider accepted admin notification for ${ticketId}. Message ID: ${adminInfo.messageId}`)
-    } else {
-      console.warn(`[EMAIL WARN] Admin notification request completed but no Message ID was returned for ${ticketId}`)
+    if (ticketData.customerId) {
+      try {
+        const customerDoc = await db.collection('customers').doc(ticketData.customerId).get()
+        if (customerDoc.exists) {
+          const customerData = customerDoc.data()
+          if (customerData.customerEmail) {
+            customerEmail = customerData.customerEmail
+          }
+          if (customerData.displayName) {
+            customerName = customerData.displayName
+          }
+        }
+      } catch (custErr) {
+        console.warn(`[BACKEND WARN] Failed to resolve customer document for customerId ${ticketData.customerId}:`, custErr.message)
+      }
     }
 
-    if (customerInfo && customerInfo.messageId) {
-      console.log(`[EMAIL] Provider accepted customer confirmation for ${ticketId}. Message ID: ${customerInfo.messageId}`)
+    const resolvedTicketData = {
+      ...ticketData,
+      customerEmail,
+      customerName
+    }
+
+    console.log(`[EMAIL] Attempting provider email requests for ticket: ${ticketId}`)
+    const [adminResult, customerResult] = await Promise.allSettled([
+      sendNewTicketNotification(resolvedTicketData),
+      sendCustomerConfirmation(resolvedTicketData)
+    ])
+
+    if (adminResult.status === 'fulfilled' && adminResult.value) {
+      console.log(`[EMAIL] Provider accepted admin notification for ${ticketId}. Message ID: ${adminResult.value.messageId}`)
     } else {
-      console.warn(`[EMAIL WARN] Customer confirmation request completed but no Message ID was returned for ${ticketId}`)
+      const errorMsg = adminResult.status === 'rejected' ? adminResult.reason.message : 'No data returned'
+      console.warn(`[EMAIL WARN] Admin notification request failed for ${ticketId}: ${errorMsg}`)
+    }
+
+    if (customerResult.status === 'fulfilled' && customerResult.value) {
+      console.log(`[EMAIL] Provider accepted customer confirmation for ${ticketId}. Message ID: ${customerResult.value.messageId}`)
+    } else {
+      const errorMsg = customerResult.status === 'rejected' ? customerResult.reason.message : 'No data returned'
+      console.warn(`[EMAIL WARN] Customer confirmation request failed for ${ticketId}: ${errorMsg}`)
     }
 
     // Mark as sent

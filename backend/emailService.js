@@ -42,7 +42,10 @@ async function getTransporter() {
       host,
       port,
       secure: port === 465,
-      auth: { user, pass }
+      auth: { user, pass },
+      connectionTimeout: 10000, // 10 seconds connection timeout
+      greetingTimeout: 10000,   // 10 seconds greeting timeout
+      socketTimeout: 10000      // 10 seconds socket inactivity timeout
     })
     console.log(`[EMAIL] SMTP Transporter initialized using configured user: ${user}`)
   } else {
