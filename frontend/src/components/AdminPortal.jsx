@@ -104,17 +104,37 @@ function AdminPortal({
   // Customer Management State
   // ========================================================
 
-  const [customers, setCustomers] = useState([])
+  // ========================================================
+  // Customer & Organization Management State
+  // ========================================================
+
+  const [customerSubTab, setCustomerSubTab] = useState('list') // 'list' | 'new-org' | 'add-user'
   const [availableAccounts, setAvailableAccounts] = useState([])
+  const [allUsers, setAllUsers] = useState([])
+  const [expandedAccountId, setExpandedAccountId] = useState(null)
+
+  // Form State: New Organization
+  const [orgName, setOrgName] = useState('')
+  const [orgShortName, setOrgShortName] = useState('')
+  const [orgContactName, setOrgContactName] = useState('')
+  const [orgContactEmail, setOrgContactEmail] = useState('')
+  const [orgServices, setOrgServices] = useState({
+    it: true,
+    web: false,
+    threadline: false,
+  })
+
+  // Form State: Add User
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [custName, setCustName] = useState('')
   const [custEmail, setCustEmail] = useState('')
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
   const [custServices, setCustServices] = useState({
-    it: false,
+    it: true,
     web: false,
     threadline: false,
   })
+
   const [customerError, setCustomerError] = useState('')
   const [customerSuccess, setCustomerSuccess] = useState('')
 
@@ -125,13 +145,13 @@ function AdminPortal({
   useEffect(() => {
     if (activeTab !== 'customers') return
 
-    // Fetch accounts for selector
-    const fetchAccounts = async () => {
-      try {
-        const qAcc = query(collection(db, 'accounts'), orderBy('name', 'asc'))
-        const snapshotAcc = await getDocs(qAcc)
+    // Fetch accounts (organizations)
+    const qAcc = query(collection(db, 'accounts'), orderBy('name', 'asc'))
+    const unsubAccounts = onSnapshot(
+      qAcc,
+      (snapshot) => {
         const listAcc = []
-        snapshotAcc.forEach((docSnap) => {
+        snapshot.forEach((docSnap) => {
           if (docSnap.data().active === true) {
             listAcc.push({ id: docSnap.id, ...docSnap.data() })
           }
@@ -140,42 +160,94 @@ function AdminPortal({
         if (listAcc.length > 0 && !selectedAccountId) {
           setSelectedAccountId(listAcc[0].id)
         }
-      } catch (err) {
-        console.error('Error fetching accounts for selector:', err)
-      }
-    }
-
-    fetchAccounts()
-
-    const q = query(
-      collection(db, 'customers'),
-      orderBy('customerName', 'asc')
-    )
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list = []
-        snapshot.forEach((docSnap) => {
-          list.push({
-            id: docSnap.id,
-            ...docSnap.data(),
-          })
-        })
-        setCustomers(list)
       },
       (err) => {
-        console.error('Error fetching customers:', err)
-        setCustomerError('Could not load customer list.')
+        console.error('Error fetching accounts:', err)
       }
     )
 
-    return () => unsubscribe()
+    // Fetch users (both users/ and legacy customers/)
+    const qUsers = query(collection(db, 'users'), orderBy('displayName', 'asc'))
+    const unsubUsers = onSnapshot(
+      qUsers,
+      (snapshot) => {
+        const listUsers = []
+        snapshot.forEach((docSnap) => {
+          listUsers.push({ id: docSnap.id, ...docSnap.data() })
+        })
+        setAllUsers(listUsers)
+      },
+      (err) => {
+        console.error('Error fetching users:', err)
+      }
+    )
+
+    return () => {
+      unsubAccounts()
+      unsubUsers()
+    }
   }, [activeTab, selectedAccountId])
 
+  const getAccountUsers = (accId) => {
+    return allUsers.filter((u) => u.accountId === accId)
+  }
+
   // ========================================================
-  // Customer Actions
+  // Organization & User Actions
   // ========================================================
+
+  const handleCreateOrganization = async (e) => {
+    e.preventDefault()
+    setCustomerError('')
+    setCustomerSuccess('')
+
+    if (!orgName.trim()) {
+      setCustomerError('Organization Name is required.')
+      return
+    }
+
+    const servicesArray = Object.keys(orgServices).filter((k) => orgServices[k])
+
+    setIsLoading(true)
+    try {
+      const idToken = await auth.currentUser.getIdToken()
+      const response = await fetch(`${API_BASE_URL}/api/accounts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          name: orgName.trim(),
+          shortName: orgShortName.trim(),
+          primaryContactName: orgContactName.trim(),
+          primaryContactEmail: orgContactEmail.trim(),
+          services: servicesArray.length > 0 ? servicesArray : ['it'],
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create organization.')
+      }
+
+      setCustomerSuccess(`Organization "${orgName.trim()}" created successfully.`)
+      setOrgName('')
+      setOrgShortName('')
+      setOrgContactName('')
+      setOrgContactEmail('')
+      setOrgServices({ it: true, web: false, threadline: false })
+      setCustomerSubTab('list')
+      if (result.accountId) {
+        setExpandedAccountId(result.accountId)
+      }
+    } catch (err) {
+      console.error('Error creating organization:', err)
+      setCustomerError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleCustomerSubmit = async (e) => {
     e.preventDefault()
@@ -183,15 +255,15 @@ function AdminPortal({
     setCustomerSuccess('')
 
     if (!selectedAccountId) {
-      setCustomerError('Customer Account selection is required.')
+      setCustomerError('Organization selection is required.')
       return
     }
     if (!custName.trim()) {
-      setCustomerError('Customer Name is required.')
+      setCustomerError('User Full Name is required.')
       return
     }
     if (!custEmail.trim()) {
-      setCustomerError('Customer Email is required.')
+      setCustomerError('User Email Address is required.')
       return
     }
 
@@ -211,20 +283,20 @@ function AdminPortal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           accountId: selectedAccountId,
           name: custName.trim(),
           email: custEmail.trim(),
           services: servicesArray,
-          sendWelcomeEmail: sendWelcomeEmail
-        })
+          sendWelcomeEmail: sendWelcomeEmail,
+        }),
       })
 
       const result = await response.json()
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to register customer.')
+        throw new Error(result.error || 'Failed to create user.')
       }
 
       if (result.warning) {
@@ -232,18 +304,20 @@ function AdminPortal({
       } else if (result.message) {
         setCustomerSuccess(result.message)
       } else {
-        setCustomerSuccess(`Customer "${custName.trim()}" registered successfully. Welcome email sent.`)
+        setCustomerSuccess(`User "${custName.trim()}" created successfully. Welcome email sent.`)
       }
 
       setCustName('')
       setCustEmail('')
       setCustServices({
-        it: false,
+        it: true,
         web: false,
         threadline: false,
       })
+      setCustomerSubTab('list')
+      setExpandedAccountId(selectedAccountId)
     } catch (err) {
-      console.error('Error registering customer:', err)
+      console.error('Error creating user:', err)
       setCustomerError(err.message)
     } finally {
       setIsLoading(false)
@@ -989,186 +1063,369 @@ function AdminPortal({
 
       {activeTab === 'customers' ? (
         <div className="admin-customers-panel">
-          <form className="admin-customer-form" onSubmit={handleCustomerSubmit}>
-            <h3 className="admin-form-section-title">✦ REGISTER NEW CUSTOMER ✦</h3>
-            
-            {customerError && (
-              <p className="admin-error-text" style={{ marginBottom: '14px' }}>
-                {customerError}
-              </p>
-            )}
-            {customerSuccess && (
-              <p className="admin-success-text" style={{ marginBottom: '14px', color: 'var(--retro-teal)', fontFamily: 'var(--font-code)', fontSize: '0.78rem', fontWeight: 700 }}>
-                {customerSuccess}
-              </p>
-            )}
-
-            <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="admin-meta-label">CUSTOMER ACCOUNT *</label>
-                <select
-                  className="admin-more-info-textarea"
-                  style={{ resize: 'none', height: '42px', padding: '10px', backgroundColor: 'var(--card-bg)', color: 'var(--text-color)' }}
-                  value={selectedAccountId}
-                  onChange={(e) => setSelectedAccountId(e.target.value)}
-                  disabled={isLoading}
-                  required
-                >
-                  <option value="" disabled>Select an account</option>
-                  {availableAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({acc.shortName || acc.id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="admin-meta-label">FULL NAME</label>
-                <input
-                  type="text"
-                  className="admin-more-info-textarea"
-                  style={{ resize: 'none', height: '42px', padding: '10px' }}
-                  value={custName}
-                  onChange={(e) => setCustName(e.target.value)}
-                  placeholder="e.g. Jon Scott"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-
-              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label className="admin-meta-label">EMAIL ADDRESS</label>
-                <input
-                  type="email"
-                  className="admin-more-info-textarea"
-                  style={{ resize: 'none', height: '42px', padding: '10px' }}
-                  value={custEmail}
-                  onChange={(e) => setCustEmail(e.target.value)}
-                  placeholder="e.g. jon@lanzar.me"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-
-              <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
-                <label className="admin-meta-label">WELCOME INVITATION</label>
-                <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', height: '42px', fontSize: '0.85rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={sendWelcomeEmail}
-                    onChange={(e) => setSendWelcomeEmail(e.target.checked)}
-                    disabled={isLoading}
-                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  Send Welcome Email
-                </label>
-              </div>
-            </div>
-
-            <div className="admin-services-checkboxes" style={{ marginBottom: '20px' }}>
-              <label className="admin-meta-label" style={{ display: 'block', marginBottom: '8px' }}>AUTHORIZED SERVICES</label>
-              <div className="admin-checkbox-row" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={custServices.it}
-                    onChange={(e) => setCustServices({ ...custServices, it: e.target.checked })}
-                    disabled={isLoading}
-                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  IT Support (it)
-                </label>
-                <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={custServices.web}
-                    onChange={(e) => setCustServices({ ...custServices, web: e.target.checked })}
-                    disabled={isLoading}
-                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  Web Services (web)
-                </label>
-                <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={custServices.threadline}
-                    onChange={(e) => setCustServices({ ...custServices, threadline: e.target.checked })}
-                    disabled={isLoading}
-                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  Threadline Ops (threadline)
-                </label>
-              </div>
-            </div>
-
-            <button type="submit" className="admin-btn-approve" disabled={isLoading}>
-              {isLoading ? 'REGISTERING...' : 'REGISTER CUSTOMER ✦'}
+          {/* Action Bar */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+            <button
+              type="button"
+              className={`admin-tab ${customerSubTab === 'new-org' ? 'active' : ''}`}
+              style={{ flex: '1', padding: '10px 16px', fontWeight: 'bold' }}
+              onClick={() => {
+                setCustomerError('')
+                setCustomerSuccess('')
+                setCustomerSubTab(customerSubTab === 'new-org' ? 'list' : 'new-org')
+              }}
+            >
+              + NEW ORGANIZATION
             </button>
-          </form>
+            <button
+              type="button"
+              className={`admin-tab ${customerSubTab === 'add-user' ? 'active' : ''}`}
+              style={{ flex: '1', padding: '10px 16px', fontWeight: 'bold' }}
+              onClick={() => {
+                setCustomerError('')
+                setCustomerSuccess('')
+                setCustomerSubTab(customerSubTab === 'add-user' ? 'list' : 'add-user')
+              }}
+            >
+              + ADD USER
+            </button>
+          </div>
 
-          <div className="admin-customers-list-section" style={{ marginTop: '24px' }}>
-            <h3 className="admin-form-section-title" style={{ marginBottom: '14px' }}>✦ REGISTERED CUSTOMERS ✦</h3>
-            <div className="admin-ticket-list" style={{ maxHeight: '380px' }}>
-              {customers.length === 0 ? (
-                <p className="admin-no-tickets">No customers registered.</p>
+          {customerError && (
+            <p className="admin-error-text" style={{ marginBottom: '14px' }}>
+              {customerError}
+            </p>
+          )}
+          {customerSuccess && (
+            <p className="admin-success-text" style={{ marginBottom: '14px', color: 'var(--retro-teal)', fontFamily: 'var(--font-code)', fontSize: '0.78rem', fontWeight: 700 }}>
+              {customerSuccess}
+            </p>
+          )}
+
+          {/* Form: New Organization */}
+          {customerSubTab === 'new-org' && (
+            <form className="admin-customer-form" onSubmit={handleCreateOrganization} style={{ marginBottom: '24px' }}>
+              <h3 className="admin-form-section-title">✦ CREATE NEW ORGANIZATION ✦</h3>
+
+              <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">ORGANIZATION NAME *</label>
+                  <input
+                    type="text"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    placeholder="e.g. Dental Associates of New England"
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">SHORT NAME / ABBREVIATION</label>
+                  <input
+                    type="text"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={orgShortName}
+                    onChange={(e) => setOrgShortName(e.target.value)}
+                    placeholder="e.g. DANE"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">PRIMARY CONTACT NAME</label>
+                  <input
+                    type="text"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={orgContactName}
+                    onChange={(e) => setOrgContactName(e.target.value)}
+                    placeholder="e.g. Erika Smith"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">PRIMARY CONTACT EMAIL</label>
+                  <input
+                    type="email"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={orgContactEmail}
+                    onChange={(e) => setOrgContactEmail(e.target.value)}
+                    placeholder="e.g. contact@bostonsmile.com"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              <div className="admin-services-checkboxes" style={{ marginBottom: '20px' }}>
+                <label className="admin-meta-label" style={{ display: 'block', marginBottom: '8px' }}>AUTHORIZED SERVICES</label>
+                <div className="admin-checkbox-row" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={orgServices.it}
+                      onChange={(e) => setOrgServices({ ...orgServices, it: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    IT Support (it)
+                  </label>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={orgServices.web}
+                      onChange={(e) => setOrgServices({ ...orgServices, web: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Web Services (web)
+                  </label>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={orgServices.threadline}
+                      onChange={(e) => setOrgServices({ ...orgServices, threadline: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Threadline Ops (threadline)
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" className="admin-btn-approve" disabled={isLoading}>
+                {isLoading ? 'CREATING...' : 'CREATE ORGANIZATION ✦'}
+              </button>
+            </form>
+          )}
+
+          {/* Form: Add User to Organization */}
+          {customerSubTab === 'add-user' && (
+            <form className="admin-customer-form" onSubmit={handleCustomerSubmit} style={{ marginBottom: '24px' }}>
+              <h3 className="admin-form-section-title">✦ ADD USER TO ORGANIZATION ✦</h3>
+
+              <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">ORGANIZATION *</label>
+                  <select
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px', backgroundColor: 'var(--card-bg)', color: 'var(--text-color)' }}
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    disabled={isLoading}
+                    required
+                  >
+                    <option value="" disabled>Select Organization</option>
+                    {availableAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.shortName || acc.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">FULL NAME *</label>
+                  <input
+                    type="text"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={custName}
+                    onChange={(e) => setCustName(e.target.value)}
+                    placeholder="e.g. Sarah Jenkins"
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="admin-meta-label">EMAIL ADDRESS *</label>
+                  <input
+                    type="email"
+                    className="admin-more-info-textarea"
+                    style={{ resize: 'none', height: '42px', padding: '10px' }}
+                    value={custEmail}
+                    onChange={(e) => setCustEmail(e.target.value)}
+                    placeholder="e.g. s.jenkins@bostonsmile.com"
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
+
+                <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center' }}>
+                  <label className="admin-meta-label">WELCOME INVITATION</label>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', height: '42px', fontSize: '0.85rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={sendWelcomeEmail}
+                      onChange={(e) => setSendWelcomeEmail(e.target.checked)}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Send Welcome Email
+                  </label>
+                </div>
+              </div>
+
+              <div className="admin-services-checkboxes" style={{ marginBottom: '20px' }}>
+                <label className="admin-meta-label" style={{ display: 'block', marginBottom: '8px' }}>AUTHORIZED SERVICES</label>
+                <div className="admin-checkbox-row" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={custServices.it}
+                      onChange={(e) => setCustServices({ ...custServices, it: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    IT Support (it)
+                  </label>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={custServices.web}
+                      onChange={(e) => setCustServices({ ...custServices, web: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Web Services (web)
+                  </label>
+                  <label className="admin-card-customer" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={custServices.threadline}
+                      onChange={(e) => setCustServices({ ...custServices, threadline: e.target.checked })}
+                      disabled={isLoading}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Threadline Ops (threadline)
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" className="admin-btn-approve" disabled={isLoading}>
+                {isLoading ? 'CREATING USER...' : 'CREATE USER ✦'}
+              </button>
+            </form>
+          )}
+
+          {/* Organizations List View */}
+          <div className="admin-customers-list-section" style={{ marginTop: '12px' }}>
+            <h3 className="admin-form-section-title" style={{ marginBottom: '14px' }}>✦ CUSTOMER ORGANIZATIONS ✦</h3>
+            <div className="admin-ticket-list" style={{ maxHeight: '480px' }}>
+              {availableAccounts.length === 0 ? (
+                <p className="admin-no-tickets">No customer organizations found.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {customers.map((c) => (
-                    <article key={c.id} className="admin-ticket-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '14px 18px' }}>
-                      <div style={{ flex: '1 1 auto', minWidth: '200px' }}>
-                        <h4 style={{ margin: '0 0 4px 0', fontFamily: 'var(--font-heading)', fontSize: '1.05rem', color: 'var(--deep-navy)' }}>
-                          {c.customerName}
-                        </h4>
-                        <p style={{ margin: '0 0 6px 0', fontSize: '0.8rem', color: 'var(--soft-gray)' }}>
-                          {c.customerEmail}
-                        </p>
-                        <p style={{ margin: '0', fontSize: '0.72rem', fontFamily: 'var(--font-code)', color: 'var(--retro-teal)' }}>
-                          UID: {c.customerId}
-                        </p>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          {c.services && c.services.map(s => (
-                            <span key={s} className="admin-card-service" style={{ fontSize: '0.62rem' }}>
-                              {s.toUpperCase()}
-                            </span>
-                          ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {availableAccounts.map((acc) => {
+                    const accUsers = getAccountUsers(acc.id)
+                    const isExpanded = expandedAccountId === acc.id
+
+                    return (
+                      <article key={acc.id} className="admin-ticket-card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--retro-teal)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                          <div style={{ flex: '1 1 auto', minWidth: '220px' }}>
+                            <h4 style={{ margin: '0 0 4px 0', fontFamily: 'var(--font-heading)', fontSize: '1.1rem', color: 'var(--deep-navy)' }}>
+                              {acc.name} {acc.shortName ? `(${acc.shortName})` : ''}
+                            </h4>
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.78rem', color: 'var(--soft-gray)', marginTop: '4px', flexWrap: 'wrap' }}>
+                              <span>Users: {accUsers.length}</span>
+                              {acc.primaryContactEmail && <span>Contact: {acc.primaryContactEmail}</span>}
+                              <span style={{ fontFamily: 'var(--font-code)', color: 'var(--retro-teal)' }}>ID: {acc.id}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              {acc.services && acc.services.map((s) => (
+                                <span key={s} className="admin-card-service" style={{ fontSize: '0.62rem' }}>
+                                  {s.toUpperCase()}
+                                </span>
+                              ))}
+                            </div>
+
+                            <button
+                              type="button"
+                              className="admin-card-view-btn"
+                              style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', padding: '5px 12px' }}
+                              onClick={() => setExpandedAccountId(isExpanded ? null : acc.id)}
+                            >
+                              {isExpanded ? 'HIDE USERS ▲' : 'MANAGE USERS ▼'}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="admin-card-view-btn"
+                              style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', padding: '5px 12px' }}
+                              onClick={() => {
+                                setSelectedAccountId(acc.id)
+                                setCustomerSubTab('add-user')
+                              }}
+                            >
+                              + ADD USER
+                            </button>
+                          </div>
                         </div>
 
-                        <button
-                          type="button"
-                          className="admin-card-view-btn"
-                          style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', padding: '5px 12px' }}
-                          onClick={() => handleSendWelcomeEmail(c)}
-                          disabled={isLoading}
-                        >
-                          SEND WELCOME
-                        </button>
-
-                        <button
-                          type="button"
-                          className="admin-card-view-btn"
-                          style={{ borderColor: 'var(--retro-teal)', color: 'var(--retro-teal)', padding: '5px 12px' }}
-                          onClick={() => handleSendPasswordReset(c.customerEmail, c.customerName)}
-                          disabled={isLoading}
-                        >
-                          SEND RESET
-                        </button>
-
-                        <button
-                          type="button"
-                          className="admin-card-view-btn"
-                          style={{ borderColor: 'var(--rocket-orange)', color: 'var(--rocket-orange)', padding: '5px 12px' }}
-                          onClick={() => handleCustomerDelete(c.customerId, c.customerName)}
-                          disabled={isLoading}
-                        >
-                          REVOKE
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                        {/* Expanded Users List */}
+                        {isExpanded && (
+                          <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed var(--border-color)' }}>
+                            <h5 style={{ margin: '0 0 10px 0', fontFamily: 'var(--font-code)', fontSize: '0.78rem', color: 'var(--retro-teal)', textTransform: 'uppercase' }}>
+                              Organization Users ({accUsers.length})
+                            </h5>
+                            {accUsers.length === 0 ? (
+                              <p style={{ fontSize: '0.8rem', color: 'var(--soft-gray)', margin: 0 }}>No users associated with this organization.</p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {accUsers.map((user) => (
+                                  <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '10px 14px', borderRadius: '4px', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                      <strong style={{ fontSize: '0.88rem', color: 'var(--deep-navy)' }}>{user.displayName || user.customerName || 'User'}</strong>
+                                      <div style={{ fontSize: '0.78rem', color: 'var(--soft-gray)' }}>{user.email || user.customerEmail}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <button
+                                        type="button"
+                                        className="admin-card-view-btn"
+                                        style={{ fontSize: '0.7rem', padding: '4px 10px' }}
+                                        onClick={() => handleSendWelcomeEmail(user)}
+                                        disabled={isLoading}
+                                      >
+                                        SEND WELCOME
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="admin-card-view-btn"
+                                        style={{ fontSize: '0.7rem', padding: '4px 10px' }}
+                                        onClick={() => handleSendPasswordReset(user.email || user.customerEmail, user.displayName || user.customerName)}
+                                        disabled={isLoading}
+                                      >
+                                        SEND RESET
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="admin-card-view-btn"
+                                        style={{ borderColor: 'var(--rocket-orange)', color: 'var(--rocket-orange)', fontSize: '0.7rem', padding: '4px 10px' }}
+                                        onClick={() => handleCustomerDelete(user.id, user.displayName || user.customerName)}
+                                        disabled={isLoading}
+                                      >
+                                        REVOKE
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    )
+                  })}
                 </div>
               )}
             </div>

@@ -175,6 +175,54 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'LANZAR Tickets Backend' })
 })
 
+// Create New Organization / Account
+app.post('/api/accounts', authenticateAdmin, async (req, res) => {
+  const { name, shortName, primaryContactName, primaryContactEmail, services } = req.body
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Organization Name is required.' })
+  }
+
+  const normalizedName = name.trim()
+
+  try {
+    // Check if account with same name already exists
+    const existingAcc = await db.collection('accounts')
+      .where('name', '==', normalizedName)
+      .limit(1)
+      .get()
+
+    if (!existingAcc.empty) {
+      return res.status(400).json({ error: 'An organization with this name already exists.' })
+    }
+
+    const accountRef = db.collection('accounts').doc()
+    const accountData = {
+      name: normalizedName,
+      shortName: shortName ? shortName.trim() : '',
+      primaryContactName: primaryContactName ? primaryContactName.trim() : '',
+      primaryContactEmail: primaryContactEmail ? primaryContactEmail.trim().toLowerCase() : '',
+      services: Array.isArray(services) && services.length > 0 ? services : ['it'],
+      active: true,
+      createdAt: FieldValue.serverTimestamp()
+    }
+
+    await accountRef.set(accountData)
+    console.log(`[BACKEND] Created new organization "${normalizedName}" (ID: ${accountRef.id})`)
+
+    return res.json({
+      success: true,
+      accountId: accountRef.id,
+      name: normalizedName,
+      shortName: accountData.shortName,
+      services: accountData.services
+    })
+  } catch (error) {
+    console.error('[BACKEND ERROR] Organization creation failed:', error)
+    return res.status(500).json({ error: 'Failed to create organization: ' + error.message })
+  }
+})
+
 // Create Customer Account (Firebase Auth + Firestore Profile + Welcome Email)
 app.post('/api/customers', authenticateAdmin, async (req, res) => {
   const { name, email, services, accountId, sendWelcomeEmail: sendEmailFlag } = req.body
