@@ -110,16 +110,23 @@ function logPreviewUrl(info) {
  * Send a notification email when a new support ticket is submitted.
  */
 export async function sendNewTicketNotification(ticket) {
-  const subject = `New LANZAR Support Ticket #${ticket.ticketNumber}`
-  const adminLink = `https://tickets.lanzar.me/?ticketId=${ticket.ticketNumber}`
+  console.log('[EMAIL] sendNewTicketNotification invoked with data:', JSON.stringify(ticket))
 
-  const textBody = `You got a new support ticket from ${ticket.customerName}.
+  const customerName = ticket?.customerName || 'Unknown Customer'
+  const ticketNumber = ticket?.ticketNumber || ticket?.id || 'N/A'
+  const category = ticket?.category || ticket?.service || 'N/A'
+  const adminLink = `https://tickets.lanzar.me/?ticketId=${ticketNumber}`
 
-Ticket: #${ticket.ticketNumber}
-Subject: ${ticket.category}
+  const subject = `New LANZAR Support Ticket #${ticketNumber}`
+  const textBody = `You got a new support ticket from ${customerName}.
+
+Ticket: #${ticketNumber}
+Subject: ${category}
 
 Open in LANZAR Tickets admin portal:
 ${adminLink}`
+
+  console.log(`[EMAIL] Generated Admin Notification text body:\n${textBody}`)
 
   const mailOptions = {
     from: `"LANZAR Terminal" <${fromEmail}>`,
@@ -130,13 +137,13 @@ ${adminLink}`
 
   try {
     const mailTransporter = await getTransporter()
-    console.log(`[EMAIL] Provider request sent for ticket: ${ticket.ticketNumber} to recipient: ${notificationEmail}`)
+    console.log(`[EMAIL] Provider request sent for ticket: ${ticketNumber} to recipient: ${notificationEmail}`)
     const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] Provider accepted message for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
+    console.log(`[EMAIL] Provider accepted message for ${ticketNumber}. Message ID: ${info.messageId}`)
     logPreviewUrl(info)
     return info
   } catch (error) {
-    console.error(`[EMAIL ERROR] Provider request failed for ${ticket.ticketNumber}:`, error.message)
+    console.error(`[EMAIL ERROR] Provider request failed for ${ticketNumber}:`, error.message)
   }
 }
 
@@ -144,39 +151,49 @@ ${adminLink}`
  * Send a confirmation email to the customer when a new ticket is submitted.
  */
 export async function sendCustomerConfirmation(ticket) {
-  const subject = `LANZAR Support Ticket Received — #${ticket.ticketNumber}`
+  console.log('[EMAIL] sendCustomerConfirmation invoked with data:', JSON.stringify(ticket))
 
-  const textBody = `Hello ${ticket.customerName},
+  const customerName = ticket?.customerName || 'Customer'
+  const ticketNumber = ticket?.ticketNumber || ticket?.id || 'N/A'
+  const service = ticket?.service || 'N/A'
+  const category = ticket?.category || 'N/A'
+  const description = ticket?.description || 'No description provided.'
 
-We have received your support ticket #${ticket.ticketNumber}.
+  const subject = `LANZAR Support Ticket Received — #${ticketNumber}`
+
+  const textBody = `Hello ${customerName},
+
+We have received your support ticket #${ticketNumber}.
 
 Basic Ticket Information:
-- Service: ${ticket.service.toUpperCase()}
-- Category: ${ticket.category}
-- Description: ${ticket.description}
+- Service: ${service.toUpperCase()}
+- Category: ${category}
+- Description: ${description}
 
 If you need to provide additional details or follow up, please email our support representative directly at jon@lanzar.me by clicking the link below:
 
-mailto:jon@lanzar.me?subject=Follow-up%20on%20Support%20Ticket%20%23${ticket.ticketNumber}
+mailto:jon@lanzar.me?subject=Follow-up%20on%20Support%20Ticket%20%23${ticketNumber}
 
 Thank you,
 LANZAR Support Terminal`
 
+  console.log(`[EMAIL] Generated Customer Confirmation text body:\n${textBody}`)
+
   const mailOptions = {
     from: `"LANZAR Terminal" <${fromEmail}>`,
-    to: ticket.customerEmail,
+    to: ticket?.customerEmail,
     subject: subject,
     text: textBody,
   }
 
   try {
     const mailTransporter = await getTransporter()
-    console.log(`[EMAIL] Confirmation request sent for ticket: ${ticket.ticketNumber} to customer: ${ticket.customerEmail}`)
+    console.log(`[EMAIL] Confirmation request sent for ticket: ${ticketNumber} to customer: ${ticket?.customerEmail}`)
     const info = await mailTransporter.sendMail(mailOptions)
-    console.log(`[EMAIL] Confirmation accepted for ${ticket.ticketNumber}. Message ID: ${info.messageId}`)
+    console.log(`[EMAIL] Confirmation accepted for ${ticketNumber}. Message ID: ${info.messageId}`)
     logPreviewUrl(info)
     return info
   } catch (error) {
-    console.error(`[EMAIL ERROR] Confirmation request failed for ${ticket.ticketNumber}:`, error.message)
+    console.error(`[EMAIL ERROR] Confirmation request failed for ${ticketNumber}:`, error.message)
   }
 }
