@@ -272,6 +272,8 @@ function App() {
         message = 'Access to this account has been temporarily disabled due to many failed login attempts.'
       } else if (error.code === 'auth/invalid-credential') {
         message = 'Incorrect email or password.'
+      } else if (error.code === 'auth/operation-not-allowed') {
+        message = 'Email/Password sign-in method is not enabled in the Firebase Console under Authentication > Sign-in method.'
       }
       
       setAuthError(message)
