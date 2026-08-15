@@ -344,6 +344,7 @@ function TicketDetails({
                 </select>
               ) : (
                 <input
+                  id="ticket-asset"
                   type="text"
                   className="ticket-select"
                   placeholder="Enter computer/device name (optional)"
@@ -412,6 +413,8 @@ function TicketDetails({
                   className="ticket-select"
                   value={answers[q.id] || ''}
                   onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                  required={q.required}
+                  aria-required={q.required ? 'true' : undefined}
                 >
                   <option value="">Select answer</option>
                   {q.options.map((opt) => (
@@ -428,6 +431,8 @@ function TicketDetails({
                   placeholder={q.placeholder || ''}
                   value={answers[q.id] || ''}
                   onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                  required={q.required}
+                  aria-required={q.required ? 'true' : undefined}
                 />
               )}
             </div>
@@ -445,10 +450,12 @@ function TicketDetails({
               rows="4"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              required
+              aria-required="true"
             />
           </div>
 
-          {error && <p className="ticket-error">{error}</p>}
+          {error && <p className="ticket-error" role="alert" aria-live="assertive">{error}</p>}
 
           <div className="ticket-actions">
             <button type="button" className="ticket-back-button" onClick={handleBack}>

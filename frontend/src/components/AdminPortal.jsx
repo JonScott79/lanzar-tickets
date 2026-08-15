@@ -1092,12 +1092,12 @@ function AdminPortal({
           </div>
 
           {customerError && (
-            <p className="admin-error-text" style={{ marginBottom: '14px' }}>
+            <p className="admin-error-text" role="alert" aria-live="assertive" style={{ marginBottom: '14px' }}>
               {customerError}
             </p>
           )}
           {customerSuccess && (
-            <p className="admin-success-text" style={{ marginBottom: '14px', color: 'var(--retro-teal)', fontFamily: 'var(--font-code)', fontSize: '0.78rem', fontWeight: 700 }}>
+            <p className="admin-success-text" role="status" aria-live="polite" style={{ marginBottom: '14px', color: 'var(--retro-teal)', fontFamily: 'var(--font-code)', fontSize: '0.78rem', fontWeight: 700 }}>
               {customerSuccess}
             </p>
           )}
@@ -1109,8 +1109,9 @@ function AdminPortal({
 
               <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">ORGANIZATION NAME *</label>
+                  <label className="admin-meta-label" htmlFor="admin-org-name">ORGANIZATION NAME *</label>
                   <input
+                    id="admin-org-name"
                     type="text"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1119,12 +1120,14 @@ function AdminPortal({
                     placeholder="e.g. Dental Associates of New England"
                     disabled={isLoading}
                     required
+                    aria-required="true"
                   />
                 </div>
 
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">SHORT NAME / ABBREVIATION</label>
+                  <label className="admin-meta-label" htmlFor="admin-org-short-name">SHORT NAME / ABBREVIATION</label>
                   <input
+                    id="admin-org-short-name"
                     type="text"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1136,8 +1139,9 @@ function AdminPortal({
                 </div>
 
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">PRIMARY CONTACT NAME</label>
+                  <label className="admin-meta-label" htmlFor="admin-org-contact-name">PRIMARY CONTACT NAME</label>
                   <input
+                    id="admin-org-contact-name"
                     type="text"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1149,8 +1153,9 @@ function AdminPortal({
                 </div>
 
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">PRIMARY CONTACT EMAIL</label>
+                  <label className="admin-meta-label" htmlFor="admin-org-contact-email">PRIMARY CONTACT EMAIL</label>
                   <input
+                    id="admin-org-contact-email"
                     type="email"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1198,7 +1203,7 @@ function AdminPortal({
                 </div>
               </div>
 
-              <button type="submit" className="admin-btn-approve" disabled={isLoading}>
+              <button type="submit" className="admin-btn-approve" disabled={isLoading} aria-busy={isLoading}>
                 {isLoading ? 'CREATING...' : 'CREATE ORGANIZATION ✦'}
               </button>
             </form>
@@ -1211,14 +1216,16 @@ function AdminPortal({
 
               <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">ORGANIZATION *</label>
+                  <label className="admin-meta-label" htmlFor="admin-user-org-select">ORGANIZATION *</label>
                   <select
+                    id="admin-user-org-select"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px', backgroundColor: 'var(--card-bg)', color: 'var(--text-color)' }}
                     value={selectedAccountId}
                     onChange={(e) => setSelectedAccountId(e.target.value)}
                     disabled={isLoading}
                     required
+                    aria-required="true"
                   >
                     <option value="" disabled>Select Organization</option>
                     {availableAccounts.map((acc) => (
@@ -1230,8 +1237,9 @@ function AdminPortal({
                 </div>
 
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">FULL NAME *</label>
+                  <label className="admin-meta-label" htmlFor="admin-user-full-name">FULL NAME *</label>
                   <input
+                    id="admin-user-full-name"
                     type="text"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1240,12 +1248,14 @@ function AdminPortal({
                     placeholder="e.g. Sarah Jenkins"
                     disabled={isLoading}
                     required
+                    aria-required="true"
                   />
                 </div>
 
                 <div className="admin-input-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label className="admin-meta-label">EMAIL ADDRESS *</label>
+                  <label className="admin-meta-label" htmlFor="admin-user-email">EMAIL ADDRESS *</label>
                   <input
+                    id="admin-user-email"
                     type="email"
                     className="admin-more-info-textarea"
                     style={{ resize: 'none', height: '42px', padding: '10px' }}
@@ -1254,6 +1264,7 @@ function AdminPortal({
                     placeholder="e.g. s.jenkins@bostonsmile.com"
                     disabled={isLoading}
                     required
+                    aria-required="true"
                   />
                 </div>
 

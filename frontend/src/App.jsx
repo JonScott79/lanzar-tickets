@@ -535,8 +535,9 @@ function App() {
               {resetMode ? (
                 <form className="signin-form" onSubmit={handleForgotPassword}>
                   <div className="signin-field">
-                    <label className="signin-field-label">EMAIL ADDRESS</label>
+                    <label className="signin-field-label" htmlFor="reset-email">EMAIL ADDRESS</label>
                     <input
+                      id="reset-email"
                       type="email"
                       className="signin-input"
                       value={email}
@@ -544,6 +545,7 @@ function App() {
                       placeholder="e.g. customer@example.com"
                       disabled={isLoading}
                       required
+                      aria-required="true"
                     />
                   </div>
 
@@ -564,6 +566,7 @@ function App() {
                       type="submit"
                       className="signin-submit-button"
                       disabled={isLoading}
+                      aria-busy={isLoading}
                     >
                       {isLoading ? 'SENDING...' : 'SEND RESET EMAIL ✦'}
                     </button>
@@ -572,8 +575,9 @@ function App() {
               ) : (
                 <form className="signin-form" onSubmit={handleEmailSignIn}>
                   <div className="signin-field">
-                    <label className="signin-field-label">EMAIL ADDRESS</label>
+                    <label className="signin-field-label" htmlFor="signin-email">EMAIL ADDRESS</label>
                     <input
+                      id="signin-email"
                       type="email"
                       className="signin-input"
                       value={email}
@@ -581,12 +585,13 @@ function App() {
                       placeholder="e.g. customer@example.com"
                       disabled={isLoading}
                       required
+                      aria-required="true"
                     />
                   </div>
 
                   <div className="signin-field">
                     <div className="signin-field-header">
-                      <label className="signin-field-label">PASSWORD</label>
+                      <label className="signin-field-label" htmlFor="signin-password">PASSWORD</label>
                       <button
                         type="button"
                         className="signin-forgot-link"
@@ -601,6 +606,7 @@ function App() {
                       </button>
                     </div>
                     <input
+                      id="signin-password"
                       type="password"
                       className="signin-input"
                       value={password}
@@ -608,6 +614,7 @@ function App() {
                       placeholder="Enter password"
                       disabled={isLoading}
                       required
+                      aria-required="true"
                     />
                   </div>
 
@@ -615,6 +622,7 @@ function App() {
                     type="submit"
                     className="signin-submit-button"
                     disabled={isLoading}
+                    aria-busy={isLoading}
                   >
                     {isLoading ? 'SIGNING IN...' : 'SIGN IN ✦'}
                   </button>
@@ -630,6 +638,7 @@ function App() {
                     type="button"
                     onClick={handleGoogleSignIn}
                     disabled={isLoading}
+                    aria-busy={isLoading}
                   >
                     <svg
                       className="google-icon"
@@ -664,13 +673,12 @@ function App() {
               </p>
 
               {authError && (
-                <p className="signin-error">
+                <p className="signin-error" role="alert" aria-live="assertive">
                   {authError}
                 </p>
               )}
-
               {authSuccess && (
-                <p className="signin-success">
+                <p className="signin-success" role="status" aria-live="polite" style={{ color: 'var(--retro-teal)', fontFamily: 'var(--font-code)', fontSize: '0.8rem', marginTop: '12px' }}>
                   {authSuccess}
                 </p>
               )}

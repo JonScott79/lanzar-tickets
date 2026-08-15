@@ -47,6 +47,13 @@ button {
   font: inherit;
 }
 
+/* Accessibility: WCAG 2.2 AA Keyboard Focus Indicator */
+:focus-visible {
+  outline: 3px solid var(--retro-teal, #2A728F);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(71, 191, 255, 0.4);
+}
+
 #root {
   min-height: 100vh;
 }
