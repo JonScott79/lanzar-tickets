@@ -599,140 +599,18 @@ function App() {
 
               </div>
 
-              {resetMode ? (
-                <form className="signin-form" onSubmit={handleForgotPassword}>
-                  <div className="signin-field">
-                    <label className="signin-field-label" htmlFor="reset-email">EMAIL ADDRESS</label>
-                    <input
-                      id="reset-email"
-                      type="email"
-                      className="signin-input"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. customer@example.com"
-                      disabled={isLoading}
-                      required
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div className="signin-actions">
-                    <button
-                      type="button"
-                      className="signin-back-link"
-                      onClick={() => {
-                        setResetMode(false)
-                        setAuthError(null)
-                        setAuthSuccess(null)
-                      }}
-                      disabled={isLoading}
-                    >
-                      ← Back to Login
-                    </button>
-                    <button
-                      type="submit"
-                      className="signin-submit-button"
-                      disabled={isLoading}
-                      aria-busy={isLoading}
-                    >
-                      {isLoading ? 'SENDING...' : 'SEND RESET EMAIL ✦'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <form className="signin-form" onSubmit={handleEmailSignIn}>
-                  <div className="signin-field">
-                    <label className="signin-field-label" htmlFor="signin-email">EMAIL ADDRESS</label>
-                    <input
-                      id="signin-email"
-                      type="email"
-                      className="signin-input"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. customer@example.com"
-                      disabled={isLoading}
-                      required
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div className="signin-field">
-                    <div className="signin-field-header">
-                      <label className="signin-field-label" htmlFor="signin-password">PASSWORD</label>
-                      <button
-                        type="button"
-                        className="signin-forgot-link"
-                        onClick={() => {
-                          setResetMode(true)
-                          setAuthError(null)
-                          setAuthSuccess(null)
-                        }}
-                        disabled={isLoading}
-                      >
-                        Forgot Password?
-                      </button>
-                    </div>
-                    <input
-                      id="signin-password"
-                      type="password"
-                      className="signin-input"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter password"
-                      disabled={isLoading}
-                      required
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="signin-submit-button"
-                    disabled={isLoading}
-                    aria-busy={isLoading}
-                  >
-                    {isLoading ? 'SIGNING IN...' : 'SIGN IN ✦'}
-                  </button>
-
-                  <div className="signin-divider">
-                    <span className="signin-divider-line"></span>
-                    <span className="signin-divider-text">OR</span>
-                    <span className="signin-divider-line"></span>
-                  </div>
-
-                  <button
-                    className="google-signin-button"
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    disabled={isLoading}
-                    aria-busy={isLoading}
-                  >
-                    <svg
-                      className="google-icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fill="#4285F4"
-                        d="M21.35 12.27c0-.71-.06-1.4-.18-2.06H12v3.9h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.23Z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 21.67c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3A9.75 9.75 0 0 0 12 21.67Z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M6.54 13.75A5.86 5.86 0 0 1 6.23 12c0-.61.11-1.2.31-1.75V7.72H3.3A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.06 1.05 4.28l3.24-2.53Z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 6.22c1.43 0 2.72.49 3.73 1.46l2.8-2.8C16.84 3.29 14.63 2.33 12 2.33a9.74 9.74 0 0 0-8.7 5.39l3.24 2.53C6.85 7.94 9 6.22 12 6.22Z"
-                      />
-                    </svg>
-                    SIGN IN WITH GOOGLE
-                  </button>
-                </form>
-              )}
+              
+    <div className="signin-form" style={{ alignItems: 'center' }}>
+      <button 
+        type="button" 
+        className="google-signin-button" 
+        onClick={initiateAuthHubLogin}
+        disabled={isLoading}
+      >
+        {isLoading ? 'REDIRECTING...' : 'SIGN IN WITH LANZAR ID'}
+      </button>
+    </div>
+  
 
               <p className="signin-note">
                 We&apos;ll only show you the services
@@ -813,7 +691,7 @@ function App() {
           {isAuthenticated &&
             viewMode === 'admin' && (
               <>
-                <div className="stella-dialogue">
+                <div className="stella-dialogue admin-dialogue">
 
                   <img
                     src="/images/decorations/stella-dialog.svg"
