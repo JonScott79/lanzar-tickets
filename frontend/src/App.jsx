@@ -24,6 +24,7 @@ import { useState, useEffect } from 'react'
 // ==========================
 
 import { onAuthStateChanged } from 'firebase/auth'
+import { generateRandomString, generateCodeChallenge } from './pkce.js'
 import { auth, signInWithGoogle, signOutUser, signInWithEmail, sendPasswordReset } from './firebase/auth.js'
 
 // ==========================
@@ -121,6 +122,53 @@ function App() {
   // ========================================================
   // Authentication Listeners
   // ========================================================
+
+  
+  const authBackendUrl = window.location.hostname === 'localhost' ? 'http://localhost:4001' : 'https://auth-api.lanzar.me';
+  
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code && state) {
+      setIsLoading(true);
+      const storedState = sessionStorage.getItem('pkce_state');
+      const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+
+      if (state !== storedState) {
+        setAuthError('Authentication state mismatch.');
+        setIsLoading(false);
+      } else {
+        fetch(authBackendUrl + '/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              code,
+              client_id: 'tickets',
+              redirect_uri: window.location.origin + window.location.pathname,
+              code_verifier: codeVerifier
+          })
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error_description || data.error || 'Exchange failed');
+          return signInWithCustomToken(data.custom_token);
+        })
+        .then(() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          sessionStorage.removeItem('pkce_state');
+          sessionStorage.removeItem('pkce_code_verifier');
+        })
+        .catch(err => {
+          console.error('[AUTH] Exchange Error:', err);
+          setAuthError('Failed to login via Auth Hub.');
+          setIsLoading(false);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        });
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -244,6 +292,25 @@ function App() {
       setAuthError(message)
       setIsLoading(false)
     }
+  }
+
+  
+  const initiateAuthHubLogin = async () => {
+    setIsLoading(true);
+    setAuthError(null);
+    const state = generateRandomString();
+    const codeVerifier = generateRandomString(64);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+    sessionStorage.setItem('pkce_state', state);
+    sessionStorage.setItem('pkce_code_verifier', codeVerifier);
+
+    const redirectUri = window.location.origin + window.location.pathname;
+    const authHubUrl = 'https://auth.lanzar.me';
+    const authUrlBase = window.location.hostname === 'localhost' ? 'http://localhost:4000' : authHubUrl;
+
+    const authUrl = `${authUrlBase}?client_id=tickets&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    window.location.href = authUrl;
   }
 
   const handleEmailSignIn = async (e) => {

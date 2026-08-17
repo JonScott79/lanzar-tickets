@@ -639,6 +639,95 @@ app.post('/api/tickets/notify', authenticateUser, async (req, res) => {
   }
 })
 
+// Global Service Catalog API
+app.get('/api/services', async (req, res) => {
+  try {
+    const snap = await db.collection('services').get()
+    const list = []
+    snap.forEach(doc => {
+      list.push({ id: doc.id, ...doc.data() })
+    })
+    return res.json({ success: true, services: list })
+  } catch (error) {
+    console.error('[BACKEND ERROR] Failed to fetch services:', error)
+    return res.status(500).json({ error: 'Failed to fetch services: ' + error.message })
+  }
+})
+
+app.post('/api/services', authenticateAdmin, async (req, res) => {
+  const { id, data } = req.body
+  if (!id || !data) {
+    return res.status(400).json({ error: 'Service ID and data are required.' })
+  }
+  try {
+    await db.collection('services').doc(id).set(data, { merge: true })
+    return res.json({ success: true, message: 'Service updated successfully.' })
+  } catch (error) {
+    console.error('[BACKEND ERROR] Failed to update service:', error)
+    return res.status(500).json({ error: 'Failed to update service: ' + error.message })
+  }
+})
+
+// Send Customer Announcement
+app.post('/api/admin/announcements', authenticateAdmin, async (req, res) => {
+  const { subject, message, accountId } = req.body
+
+  if (!subject || !message) {
+    return res.status(400).json({ error: 'Subject and message are required.' })
+  }
+
+  try {
+    let usersQuery = db.collection('users').where('active', '==', true)
+    
+    if (accountId && accountId !== 'ALL') {
+      usersQuery = usersQuery.where('accountId', '==', accountId)
+    }
+
+    const snapshot = await usersQuery.get()
+    
+    if (snapshot.empty) {
+      return res.status(400).json({ error: 'No active users found to send the announcement to.' })
+    }
+
+    const recipients = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data.email) {
+        recipients.push({ email: data.email, name: data.displayName || 'Customer' })
+      }
+    })
+
+    if (recipients.length === 0) {
+      return res.status(400).json({ error: 'No valid email addresses found among the targeted users.' })
+    }
+
+    const { sendAnnouncementEmail } = await import('./emailService.js')
+    const results = await sendAnnouncementEmail(recipients, subject, message)
+
+    // Log the announcement in Firestore for auditability
+    await db.collection('announcements').add({
+      subject,
+      message,
+      targetAccountId: accountId || 'ALL',
+      recipientCount: recipients.length,
+      successCount: results.success,
+      failureCount: results.failures,
+      sentBy: req.admin.uid,
+      sentAt: FieldValue.serverTimestamp()
+    })
+
+    return res.json({ 
+      success: true, 
+      recipientCount: recipients.length,
+      delivered: results.success,
+      failed: results.failures
+    })
+  } catch (error) {
+    console.error('[BACKEND ERROR] Announcement dispatch failed:', error)
+    return res.status(500).json({ error: 'Failed to dispatch announcement: ' + error.message })
+  }
+})
+
 
 
 // =====================================

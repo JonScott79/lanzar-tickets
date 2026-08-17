@@ -1,15 +1,3 @@
-/*
-    emailService.js
-
-    LANZAR Support Tickets email communication service.
-
-    Responsibilities
-
-    - Send outbound transactional email notifications (new ticket, admin more info, customer response)
-    - Communicate directly with the Brevo Transactional Email HTTPS API
-    - Support environment variable configurations safely
-*/
-
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -217,4 +205,37 @@ LANZAR Support Terminal`
     console.error(`[EMAIL ERROR] Welcome email dispatch failed for ${userEmail}:`, error.message)
     throw error
   }
+}
+
+/**
+ * Send a broadcast announcement to a list of customers.
+ */
+export async function sendAnnouncementEmail(recipients, subject, textContent) {
+  console.log(`[EMAIL] sendAnnouncementEmail invoked for ${recipients.length} recipients`)
+  
+  if (!recipients || recipients.length === 0) {
+    console.warn('[EMAIL WARN] No recipients provided for announcement.')
+    return { success: 0, failures: 0 }
+  }
+
+  const results = {
+    success: 0,
+    failures: 0,
+    failedEmails: []
+  }
+
+  // We should send individual emails rather than Bccing everyone, 
+  // to avoid exposing customer list or hitting limits.
+  for (const rcpt of recipients) {
+    try {
+      await sendViaBrevo(rcpt.email, rcpt.name, subject, textContent)
+      results.success++
+    } catch (err) {
+      console.error(`[EMAIL ERROR] Failed to send announcement to ${rcpt.email}:`, err.message)
+      results.failures++
+      results.failedEmails.push(rcpt.email)
+    }
+  }
+
+  return results
 }

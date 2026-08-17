@@ -1,4 +1,4 @@
-/*
+﻿/*
     auth.js
 
     LANZAR Support Tickets authentication service.
@@ -18,6 +18,7 @@ import {
   signOut,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  signInWithCustomToken as fbSignInWithCustomToken,
 } from 'firebase/auth'
 
 import app from './config.js'
@@ -71,6 +72,8 @@ export async function signInWithEmail(email, password) {
 // ==========================
 // Password Reset
 // ==========================
+
+export async function signInWithCustomToken(token) { return await fbSignInWithCustomToken(auth, token); }
 
 export async function sendPasswordReset(email) {
   await sendPasswordResetEmail(auth, email)
