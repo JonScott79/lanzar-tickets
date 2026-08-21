@@ -29,7 +29,26 @@ function ServiceSelector({
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/services')
+        const db = getFirestore(app)
+        const snap = await getDocs(collection(db, 'services'))
+        if (!snap.empty) {
+          const list = []
+          snap.forEach(doc => {
+            const data = doc.data()
+            if (data.active !== false && data.ticketEligible !== false) {
+              list.push({ id: doc.id, ...data })
+            }
+          })
+          setGlobalServices(list)
+          return
+        }
+      } catch (err) {
+        console.warn('Direct Firestore service load failed, falling back to API:', err)
+      }
+
+      try {
+        const apiUrl = import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api/services` : '/api/services'
+        const res = await fetch(apiUrl)
         const data = await res.json()
         if (data.success) {
           const list = data.services.filter(doc => doc.active && doc.ticketEligible)
