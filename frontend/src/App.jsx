@@ -591,9 +591,14 @@ function App() {
                   </p>
 
                   <p className="signin-question">
-                    {resetMode
-                      ? 'Enter your email to request a password reset link.'
-                      : 'You just gotta sign in so we can direct you to the right service.'}
+                    {resetMode ? (
+                      'Enter your email to request a password reset link.'
+                    ) : (
+                      <>
+                        You just gotta sign in so we can direct<br />
+                        you to the right service.
+                      </>
+                    )}
                   </p>
 
                   </div>
