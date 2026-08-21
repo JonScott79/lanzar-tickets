@@ -140,13 +140,14 @@ function App() {
         setAuthError('Authentication state mismatch.');
         setIsLoading(false);
       } else {
+        const cleanRedirectUri = (window.location.origin + window.location.pathname).replace(/\/+$/, '') || window.location.origin;
         fetch(authBackendUrl + '/exchange', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
               code,
               client_id: 'tickets',
-              redirect_uri: window.location.origin + window.location.pathname,
+              redirect_uri: cleanRedirectUri,
               code_verifier: codeVerifier
           })
         })
@@ -305,7 +306,7 @@ function App() {
     sessionStorage.setItem('pkce_state', state);
     sessionStorage.setItem('pkce_code_verifier', codeVerifier);
 
-    const redirectUri = window.location.origin + window.location.pathname;
+    const redirectUri = (window.location.origin + window.location.pathname).replace(/\/+$/, '') || window.location.origin;
     const authHubUrl = 'https://auth.lanzar.me';
     const authUrlBase = window.location.hostname === 'localhost' ? 'http://localhost:4000' : authHubUrl;
 
