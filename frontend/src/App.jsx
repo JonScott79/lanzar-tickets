@@ -25,7 +25,7 @@ import { useState, useEffect } from 'react'
 
 import { onAuthStateChanged } from 'firebase/auth'
 import { generateRandomString, generateCodeChallenge } from './pkce.js'
-import { auth, signInWithGoogle, signOutUser, signInWithEmail, sendPasswordReset } from './firebase/auth.js'
+import { auth, signInWithGoogle, signOutUser, signInWithEmail, sendPasswordReset, signInWithCustomToken } from './firebase/auth.js'
 
 // ==========================
 // Customer & Admin
