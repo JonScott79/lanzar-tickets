@@ -56,7 +56,7 @@
   position: relative;
   z-index: 2;
 
-  min-height: 300px;
+  min-height: 280px;
 
   display: flex;
 
@@ -64,10 +64,10 @@
   justify-content: center;
 
   padding:
-    58px
-    105px
-    58px
-    175px;
+    40px
+    140px
+    40px
+    160px;
 }
 
 /* ==========================================================
@@ -86,11 +86,11 @@
   color: var(--rocket-orange);
 
   font-family: var(--font-heading);
-  font-size: clamp(2.8rem, 5vw, 5rem);
+  font-size: clamp(2.2rem, 3.8vw, 3.8rem);
   font-weight: 800;
 
-  line-height: 0.95;
-  letter-spacing: -0.04em;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 /* ==========================================================
@@ -101,41 +101,17 @@
   position: relative;
   z-index: 2;
 
-  width: 100%;
-  max-width: 620px;
+  max-width: 580px;
 
-  margin: 20px 0 0;
-
-  color: var(--deep-navy);
-
-  font-family: var(--font-heading);
-  font-size: clamp(1.25rem, 2vw, 2rem);
-  font-weight: 800;
-
-  line-height: 1.15;
-
-  white-space: nowrap;
-}
-
-/* ==========================================================
-   Stella Question
-   ========================================================== */
-
-.stella-question {
-  position: relative;
-  z-index: 2;
-
-  max-width: none;
-
-  margin: 20px 0 0;
+  margin: 12px 0 0;
 
   color: var(--deep-navy);
 
   font-family: var(--font-heading);
-  font-size: clamp(1.25rem, 2vw, 2rem);
-  font-weight: 800;
+  font-size: clamp(1.1rem, 1.6vw, 1.6rem);
+  font-weight: 700;
 
-  line-height: 1.15;
+  line-height: 1.25;
 }
 
 /* ==========================================================

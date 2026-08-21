@@ -86,10 +86,10 @@
     />
 
     <!-- ======================================================
-         Atomic Age Stars
+         Atomic Age Decorative Accents (Perimeter Only)
          ====================================================== -->
 
-    <!-- Large left star, kept outside the HTML text area -->
+    <!-- Left outer star -->
     <path
         d="
             M 116 116
@@ -109,7 +109,7 @@
         fill="#f46b45"
     />
 
-    <!-- Small teal sparkle -->
+    <!-- Small teal sparkle on far left perimeter -->
     <path
         d="
             M 80 185
@@ -123,36 +123,5 @@
             Z
         "
         fill="#2a728f"
-    />
-
-    <!-- Orange star near the right side -->
-    <path
-        d="
-            M 835 105
-            L 840 137
-            L 856 121
-            L 845 143
-            L 869 151
-            L 845 157
-            L 835 190
-            L 830 157
-            L 806 151
-            L 829 143
-            L 816 121
-            L 831 137
-            Z
-        "
-        fill="#f46b45"
-    />
-
-    <!-- ======================================================
-         Hand-Drawn Accent Beneath The Question
-         ====================================================== -->
-
-    <path
-        d="M 505 314 C 590 294, 690 289, 790 302"
-        stroke="#f46b45"
-        stroke-width="5"
-        stroke-linecap="round"
     />
 </svg>
