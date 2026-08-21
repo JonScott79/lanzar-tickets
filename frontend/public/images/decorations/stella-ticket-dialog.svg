@@ -33,32 +33,16 @@
       Z
     " stroke="#78AFC0" stroke-width="3" stroke-linejoin="round"></path>
 
-  <!-- Large atomic star -->
+  <!-- Outer perimeter star -->
   <path d="
-      M 125 95
-      L 136 128
-      L 169 139
-      L 136 150
-      L 125 184
-      L 114 150
-      L 81 139
-      L 114 128
+      M 75 95
+      L 83 118
+      L 106 126
+      L 83 134
+      L 75 157
+      L 67 134
+      L 44 126
+      L 67 118
       Z
     " fill="#F46B45"></path>
-
-  <!-- Small atomic star -->
-  <path d="
-      M 730 82
-      L 738 105
-      L 761 113
-      L 738 121
-      L 730 144
-      L 722 121
-      L 699 113
-      L 722 105
-      Z
-    " fill="#F46B45"></path>
-
-  <!-- Decorative underline -->
-  <path d="M 430 235 C 490 220 550 220 610 230" stroke="#F46B45" stroke-width="5" stroke-linecap="round"></path>
 </svg>

@@ -60,17 +60,17 @@
   position: relative;
   z-index: 2;
 
-  min-height: 300px;
+  min-height: 250px;
 
   display: flex;
   flex-direction: column;
   justify-content: center;
 
   padding:
-    72px
-    155px
-    125px
-    185px;
+    40px
+    140px
+    50px
+    150px;
 }
 
 .ticket-greeting {
