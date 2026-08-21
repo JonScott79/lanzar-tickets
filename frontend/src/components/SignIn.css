@@ -25,6 +25,8 @@
   align-items: center;
 
   width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 /* ==========================================================
@@ -32,11 +34,11 @@
    ========================================================== */
 
 .signin-dialogue {
-  width: 125%;
+  width: 135%;
   max-width: none;
 
   margin-top: 0;
-  margin-left: -10px;
+  margin-left: -90px;
 
   transform: translateY(-90px);
 }
@@ -46,13 +48,17 @@
    ========================================================== */
 
 .signin-dialogue .stella-dialogue-content {
-  min-height: 230px;
+  min-height: 270px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 
   padding:
-    54px
-    90px
-    54px
-    115px;
+    40px
+    140px
+    40px
+    160px;
 }
 
 /* ==========================================================
@@ -68,11 +74,11 @@
   color: var(--rocket-orange);
 
   font-family: var(--font-heading);
-  font-size: clamp(2.8rem, 4.5vw, 4.5rem);
+  font-size: clamp(2.4rem, 4vw, 4rem);
   font-weight: 800;
 
-  line-height: 0.95;
-  letter-spacing: -0.04em;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 /* ==========================================================
@@ -83,17 +89,17 @@
   position: relative;
   z-index: 2;
 
-  max-width: 620px;
+  max-width: 520px;
 
-  margin: 18px 0 0;
+  margin: 12px 0 0;
 
   color: var(--deep-navy);
 
   font-family: var(--font-heading);
-  font-size: clamp(1.25rem, 2vw, 2rem);
-  font-weight: 800;
+  font-size: clamp(1.1rem, 1.6vw, 1.5rem);
+  font-weight: 700;
 
-  line-height: 1.15;
+  line-height: 1.25;
 }
 
 /* ==========================================================
@@ -112,13 +118,14 @@
   gap: 14px;
 
   width: 360px;
-  min-height: 58px;
+  max-width: 100%;
+  min-height: 54px;
 
-  margin-top: -45px;
+  margin-top: -35px;
   margin-left: auto;
   margin-right: auto;
 
-  padding: 16px 32px;
+  padding: 14px 28px;
 
   border: 3px solid var(--retro-teal);
   border-radius: var(--radius-pill);
@@ -127,7 +134,7 @@
   color: var(--deep-navy);
 
   font-family: var(--font-heading);
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 800;
 
   letter-spacing: 0.04em;

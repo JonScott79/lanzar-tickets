@@ -137,7 +137,9 @@ function TicketDetails({
   const currentAsset = accountAssets.find(a => a.id === selectedAssetId)
   const resolvedAssetName = currentAsset
     ? `${currentAsset.name} (${currentAsset.type})`
-    : manualAssetName.trim() || ''
+    : selectedAssetId === '__unsure__'
+      ? manualAssetName.trim() ? `Unlabeled Machine (${manualAssetName.trim()})` : 'Unlabeled / Unknown Machine'
+      : manualAssetName.trim() || ''
 
   // ==========================
   // Handlers
@@ -394,25 +396,44 @@ function TicketDetails({
                 {getAssetQuestionLabel()}
               </label>
               {filteredAssets.length > 0 ? (
-                <select
-                  id="ticket-asset"
-                  className="ticket-select"
-                  value={selectedAssetId}
-                  onChange={(e) => setSelectedAssetId(e.target.value)}
-                >
-                  <option value="">Select an authorized asset (optional)</option>
-                  {filteredAssets.map((asset) => (
-                    <option key={asset.id} value={asset.id}>
-                      {asset.name} {asset.hostname ? `(${asset.hostname})` : ''} {asset.type ? `- ${asset.type.toUpperCase()}` : ''}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    id="ticket-asset"
+                    className="ticket-select"
+                    value={selectedAssetId}
+                    onChange={(e) => {
+                      setSelectedAssetId(e.target.value)
+                      if (e.target.value !== '__unsure__') {
+                        setManualAssetName('')
+                      }
+                    }}
+                  >
+                    <option value="">Select an authorized asset</option>
+                    <option value="__unsure__">❓ Unsure / No sticker or label on machine</option>
+                    {filteredAssets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.name} {asset.hostname ? `(${asset.hostname})` : ''} {asset.station ? `— ${asset.station}` : ''} {asset.type ? `[${asset.type.toUpperCase()}]` : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedAssetId === '__unsure__' && (
+                    <input
+                      type="text"
+                      className="ticket-select"
+                      style={{ marginTop: '8px' }}
+                      placeholder="Optional: Describe location or desk (e.g. Front desk left, Dr. office, Operatory 3)"
+                      value={manualAssetName}
+                      onChange={(e) => setManualAssetName(e.target.value)}
+                    />
+                  )}
+                </>
               ) : (
                 <input
                   id="ticket-asset"
                   type="text"
                   className="ticket-select"
-                  placeholder="Enter computer/device name (optional)"
+                  placeholder="Enter computer/device name or desk location (optional)"
                   value={manualAssetName}
                   onChange={(e) => setManualAssetName(e.target.value)}
                 />
