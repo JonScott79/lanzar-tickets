@@ -416,8 +416,24 @@ app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res
       }
     }
 
-    if (!email) {
-      return res.status(404).json({ error: 'Customer email address not found.' })
+    let authEmailToUse = email
+    try {
+      const authRecord = await auth.getUser(uid)
+      if (authRecord && authRecord.email) {
+        authEmailToUse = authRecord.email
+      }
+    } catch (authErr) {
+      // If user is not yet in Firebase Auth, create them so we can generate their setup link
+      try {
+        const createdAuthUser = await auth.createUser({
+          uid: uid,
+          email: email,
+          displayName: name || email
+        })
+        authEmailToUse = createdAuthUser.email
+      } catch (createErr) {
+        console.warn('[BACKEND WARN] Could not create auth user for link generation:', createErr.message)
+      }
     }
 
     let accountName = 'LANZAR Tickets'
@@ -428,7 +444,7 @@ app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res
       }
     }
 
-    const resetLink = await auth.generatePasswordResetLink(email)
+    const resetLink = await auth.generatePasswordResetLink(authEmailToUse)
     await sendWelcomeEmail(email, name, accountName, resetLink)
 
     return res.json({
