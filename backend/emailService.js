@@ -208,6 +208,44 @@ LANZAR Support Terminal`
 }
 
 /**
+ * Send a branded password reset email with a secure link to a customer user.
+ */
+export async function sendPasswordResetEmail(userEmail, userName, resetLink) {
+  console.log(`[EMAIL] sendPasswordResetEmail invoked for recipient: ${userEmail}`)
+
+  if (!userEmail) {
+    console.warn('[EMAIL WARN] Cannot send password reset email: missing recipient email address.')
+    return
+  }
+
+  const name = userName || 'Customer'
+  const subject = 'LANZAR Tickets — Password Reset Request'
+
+  const textBody = `Hello ${name},
+
+A password reset request was submitted for your LANZAR Tickets account (${userEmail}).
+
+Please click the link below to set a new password:
+
+${resetLink}
+
+If you did not request this password reset, please contact LANZAR Support at jon@lanzar.me.
+
+Thank you,
+LANZAR Support Terminal`
+
+  console.log(`[EMAIL] Dispatching Password Reset Email to ${userEmail}...`)
+
+  try {
+    const info = await sendViaBrevo(userEmail, name, subject, textBody)
+    return info
+  } catch (error) {
+    console.error(`[EMAIL ERROR] Password reset dispatch failed for ${userEmail}:`, error.message)
+    throw error
+  }
+}
+
+/**
  * Send a broadcast announcement to a list of customers.
  */
 export async function sendAnnouncementEmail(recipients, subject, textContent) {

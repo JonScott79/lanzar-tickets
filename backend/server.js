@@ -27,7 +27,8 @@ import fs from 'node:fs'
 import { 
   sendNewTicketNotification, 
   sendCustomerConfirmation,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  sendPasswordResetEmail
 } from './emailService.js'
 
 dotenv.config()
@@ -510,23 +511,7 @@ app.post('/api/customers/:uid/password-reset', authenticateAdmin, async (req, re
     }
 
     const resetLink = await auth.generatePasswordResetLink(authEmailToUse)
-    
-    // Dispatch via Brevo
-    const subject = 'LANZAR Tickets — Password Reset Request'
-    const textBody = `Hello ${name || 'Customer'},
-
-A password reset request was submitted for your LANZAR Tickets account (${email}).
-
-Please click the link below to set a new password:
-
-${resetLink}
-
-If you did not request this password reset, please contact LANZAR Support at jon@lanzar.me.
-
-Thank you,
-LANZAR Support Terminal`
-
-    await sendViaBrevo(email, name || email, subject, textBody)
+    await sendPasswordResetEmail(email, name, resetLink)
 
     return res.json({
       success: true,
