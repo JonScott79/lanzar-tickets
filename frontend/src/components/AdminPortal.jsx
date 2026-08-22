@@ -359,17 +359,42 @@ function AdminPortal({
     }
   }
 
-  const handleSendPasswordReset = async (email, name) => {
-    if (!email) return
+  const handleSendPasswordReset = async (user) => {
+    const email = user.email || user.customerEmail || user.authEmail
+    const name = user.displayName || user.customerName || 'Customer'
+    if (!email) {
+      setCustomerError('No email found for this user.')
+      return
+    }
     setCustomerError('')
     setCustomerSuccess('')
     setIsLoading(true)
     try {
-      await sendPasswordReset(email)
-      setCustomerSuccess(`Password reset email sent to customer "${name}" successfully.`)
+      const idToken = await auth.currentUser.getIdToken()
+      const response = await fetch(`${API_BASE_URL}/api/customers/${user.id}/password-reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        }
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        // Fallback to client-side Firebase method if backend returns error
+        await sendPasswordReset(email)
+      }
+
+      setCustomerSuccess(result.message || `Password reset email sent to "${name}" (${email}) successfully.`)
     } catch (err) {
-      console.error('Error sending password reset:', err)
-      setCustomerError('Failed to send password reset: ' + err.message)
+      console.warn('Backend password reset failed, trying client fallback:', err)
+      try {
+        await sendPasswordReset(email)
+        setCustomerSuccess(`Password reset email sent to "${name}" (${email}) successfully.`)
+      } catch (fallbackErr) {
+        console.error('Password reset failed:', fallbackErr)
+        setCustomerError('Failed to send password reset: ' + fallbackErr.message)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -1433,7 +1458,7 @@ function AdminPortal({
                                         type="button"
                                         className="admin-card-view-btn"
                                         style={{ fontSize: '0.7rem', padding: '4px 10px' }}
-                                        onClick={() => handleSendPasswordReset(user.email || user.customerEmail, user.displayName || user.customerName)}
+                                        onClick={() => handleSendPasswordReset(user)}
                                         disabled={isLoading || user.active === false}
                                       >
                                         SEND RESET

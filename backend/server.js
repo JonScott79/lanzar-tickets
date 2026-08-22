@@ -453,7 +453,84 @@ app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res
     })
   } catch (error) {
     console.error(`[BACKEND ERROR] Failed to send welcome email for UID ${uid}:`, error)
-    return res.status(500).json({ error: 'Failed to send welcome email: ' + error.message })
+// Send Password Reset Email for an Existing Customer
+app.post('/api/customers/:uid/password-reset', authenticateAdmin, async (req, res) => {
+  const { uid } = req.params
+
+  try {
+    const userDoc = await db.collection('users').doc(uid).get()
+    const custDoc = await db.collection('customers').doc(uid).get()
+
+    let email = null
+    let name = null
+
+    if (userDoc.exists) {
+      const uData = userDoc.data()
+      email = uData.email
+      name = uData.displayName
+    } else if (custDoc.exists) {
+      const cData = custDoc.data()
+      email = cData.customerEmail || cData.authEmail
+      name = cData.customerName || cData.displayName
+    } else {
+      try {
+        const authRecord = await auth.getUser(uid)
+        email = authRecord.email
+        name = authRecord.displayName
+      } catch (e) {
+        return res.status(404).json({ error: 'Customer user record not found.' })
+      }
+    }
+
+    if (!email) {
+      return res.status(404).json({ error: 'Customer email address not found.' })
+    }
+
+    let authEmailToUse = email
+    try {
+      const authRecord = await auth.getUser(uid)
+      if (authRecord && authRecord.email) {
+        authEmailToUse = authRecord.email
+      }
+    } catch (authErr) {
+      try {
+        const createdAuthUser = await auth.createUser({
+          uid: uid,
+          email: email,
+          displayName: name || email
+        })
+        authEmailToUse = createdAuthUser.email
+      } catch (createErr) {
+        console.warn('[BACKEND WARN] Could not create auth user for reset link generation:', createErr.message)
+      }
+    }
+
+    const resetLink = await auth.generatePasswordResetLink(authEmailToUse)
+    
+    // Dispatch via Brevo
+    const subject = 'LANZAR Tickets — Password Reset Request'
+    const textBody = `Hello ${name || 'Customer'},
+
+A password reset request was submitted for your LANZAR Tickets account (${email}).
+
+Please click the link below to set a new password:
+
+${resetLink}
+
+If you did not request this password reset, please contact LANZAR Support at jon@lanzar.me.
+
+Thank you,
+LANZAR Support Terminal`
+
+    await sendViaBrevo(email, name || email, subject, textBody)
+
+    return res.json({
+      success: true,
+      message: `Password reset email sent successfully to ${email}.`
+    })
+  } catch (error) {
+    console.error(`[BACKEND ERROR] Failed to send password reset for UID ${uid}:`, error)
+    return res.status(500).json({ error: 'Failed to send password reset: ' + error.message })
   }
 })
 
