@@ -325,9 +325,12 @@ function AdminPortal({
   }
 
   const handleSendWelcomeEmail = async (customer) => {
-    const email = customer.customerEmail || customer.authEmail
-    const name = customer.customerName || customer.displayName || 'Customer'
-    if (!email) return
+    const email = customer.email || customer.customerEmail || customer.authEmail
+    const name = customer.displayName || customer.customerName || 'Customer'
+    if (!email) {
+      setCustomerError('No email found for this user.')
+      return
+    }
 
     setCustomerError('')
     setCustomerSuccess('')
