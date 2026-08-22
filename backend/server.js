@@ -453,6 +453,10 @@ app.post('/api/customers/:uid/welcome-email', authenticateAdmin, async (req, res
     })
   } catch (error) {
     console.error(`[BACKEND ERROR] Failed to send welcome email for UID ${uid}:`, error)
+    return res.status(500).json({ error: 'Failed to send welcome email: ' + error.message })
+  }
+})
+
 // Send Password Reset Email for an Existing Customer
 app.post('/api/customers/:uid/password-reset', authenticateAdmin, async (req, res) => {
   const { uid } = req.params
