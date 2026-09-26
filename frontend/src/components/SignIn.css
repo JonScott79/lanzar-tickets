@@ -481,3 +481,186 @@
   justify-content: space-between;
   align-items: center;
 }
+
+/* ==========================================================
+   No Account / Sign-Up / Back to Home Actions
+   ========================================================== */
+
+.no-account-section {
+  width: 360px;
+  max-width: 100%;
+  margin: 16px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  z-index: 6;
+}
+
+.no-account-divider {
+  display: flex;
+  align-items: center;
+  margin: 4px 0 2px;
+}
+
+.no-account-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(32, 48, 60, 0.16);
+}
+
+.no-account-divider-text {
+  padding: 0 10px;
+  font-family: var(--font-code);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--soft-gray);
+  text-transform: uppercase;
+}
+
+.no-account-actions,
+.unauthorized-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.unauthorized-actions {
+  width: 360px;
+  max-width: 100%;
+  margin: -35px auto 0;
+  position: relative;
+  z-index: 6;
+}
+
+.no-account-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-heading);
+  font-size: 0.96rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    transform var(--speed-fast),
+    background var(--speed-normal),
+    color var(--speed-normal),
+    border-color var(--speed-normal),
+    box-shadow var(--speed-normal);
+}
+
+.no-account-button .action-icon {
+  flex: 0 0 auto;
+}
+
+/* Call to Sign Up Button - prominent orange */
+.no-account-button.call-button {
+  background: var(--rocket-orange);
+  color: var(--text-light);
+  border: 2px solid var(--rocket-orange);
+  box-shadow: 0 4px 0 rgba(244, 107, 69, 0.2);
+}
+
+.no-account-button.call-button:hover {
+  transform: translateY(-2px);
+  background: #e25b36;
+  border-color: #e25b36;
+  box-shadow: 0 6px 0 rgba(244, 107, 69, 0.25), var(--shadow-small);
+}
+
+/* Email to Sign Up Button - crisp teal */
+.no-account-button.email-button {
+  background: var(--bg-secondary);
+  color: var(--retro-teal);
+  border: 2px solid var(--retro-teal);
+  box-shadow: 0 4px 0 rgba(42, 114, 143, 0.12);
+}
+
+.no-account-button.email-button:hover {
+  transform: translateY(-2px);
+  background: var(--retro-teal);
+  color: var(--text-light);
+  box-shadow: 0 6px 0 rgba(42, 114, 143, 0.18), var(--shadow-small);
+}
+
+/* Back to lanzar.me - subtle navy pill */
+.no-account-button.home-button {
+  background: transparent;
+  color: var(--deep-navy);
+  border: 2px solid rgba(32, 48, 60, 0.35);
+}
+
+.no-account-button.home-button:hover {
+  transform: translateY(-2px);
+  background: rgba(32, 48, 60, 0.06);
+  border-color: var(--deep-navy);
+  color: var(--deep-navy);
+}
+
+.no-account-footnote {
+  margin: 4px 0 0;
+  text-align: center;
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  color: var(--soft-gray);
+  line-height: 1.4;
+}
+
+.no-account-footnote a {
+  color: var(--retro-teal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+}
+
+.no-account-footnote a:hover {
+  color: var(--rocket-orange);
+}
+
+.header-nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--retro-teal);
+  background: var(--bg-secondary);
+  color: var(--retro-teal);
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: all var(--speed-fast);
+}
+
+.header-nav-link:hover {
+  transform: translateY(-2px);
+  background: var(--retro-teal);
+  color: var(--text-light);
+  box-shadow: var(--shadow-small);
+}
+
+.terminal-header-title-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+}
+
+.terminal-header-title-link:hover .terminal-header-title {
+  color: var(--rocket-orange);
+}
+
+.unauthorized-actions .signout-button {
+  margin-top: 6px;
+  width: 100%;
+}

@@ -480,9 +480,11 @@ function App() {
     return (
       <main className="ticket-terminal">
         <header className="ticket-header">
-          <span className="terminal-header-title">
-            LANZAR SUPPORT TERMINAL
-          </span>
+          <a href="https://lanzar.me" className="terminal-header-title-link" title="LANZAR Corporate Home">
+            <span className="terminal-header-title">
+              LANZAR SUPPORT TERMINAL
+            </span>
+          </a>
         </header>
 
         <section className="welcome-panel">
@@ -523,11 +525,20 @@ function App() {
     <main className="ticket-terminal">
 
       <header className="ticket-header">
-        <span className="terminal-header-title">
-          LANZAR SUPPORT TERMINAL
-        </span>
+        <a href="https://lanzar.me" className="terminal-header-title-link" title="LANZAR Corporate Home">
+          <span className="terminal-header-title">
+            LANZAR SUPPORT TERMINAL
+          </span>
+        </a>
 
         <div className="header-actions">
+          <a
+            href="https://lanzar.me"
+            className="header-nav-link"
+            title="Back to LANZAR Homepage"
+          >
+            ← LANZAR.ME
+          </a>
           {isAuthenticated && isAdmin && customer && (
             <button
               className="role-toggle-button"
@@ -634,6 +645,57 @@ function App() {
                 </p>
               )}
 
+              <div className="no-account-section">
+                <div className="no-account-divider">
+                  <span className="no-account-divider-line"></span>
+                  <span className="no-account-divider-text">NEW CLIENT?</span>
+                  <span className="no-account-divider-line"></span>
+                </div>
+
+                <div className="no-account-actions">
+                  <a
+                    href="tel:+15085718819"
+                    className="no-account-button call-button"
+                    title="Call (508) 571-8819 to sign up"
+                    id="btn-call-to-sign-up"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                    CALL TO SIGN UP
+                  </a>
+
+                  <a
+                    href="mailto:jon@lanzar.me?subject=LANZAR%20Support%20Account%20Request&body=Hi%20Jon,%0A%0AI'd%20like%20to%20set%20up%20an%20account%20for%20the%20LANZAR%20Support%20Terminal.%0A%0AName:%20%0ACompany:%20%0APhone:%20"
+                    className="no-account-button email-button"
+                    title="Send an email to jon@lanzar.me to sign up"
+                    id="btn-email-to-sign-up"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    EMAIL TO SIGN UP
+                  </a>
+
+                  <a
+                    href="https://lanzar.me"
+                    className="no-account-button home-button"
+                    title="Return to Lanzar Corporate Home"
+                    id="btn-back-to-lanzar"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    BACK TO LANZAR.ME
+                  </a>
+                </div>
+
+                <p className="no-account-footnote">
+                  Direct dispatch: <a href="tel:+15085718819">(508) 571-8819</a> &bull; <a href="mailto:jon@lanzar.me">jon@lanzar.me</a>
+                </p>
+              </div>
+
             </div>
           )}
 
@@ -670,16 +732,56 @@ function App() {
 
                 </div>
 
-                <button
-                  className="google-signin-button"
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={isLoading}
-                >
-                  {isLoading
-                    ? 'SIGNING OUT...'
-                    : 'SIGN OUT'}
-                </button>
+                <div className="no-account-actions unauthorized-actions">
+                  <a
+                    href="tel:+15085718819"
+                    className="no-account-button call-button"
+                    title="Call (508) 571-8819 to register"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                    CALL TO SIGN UP
+                  </a>
+
+                  <a
+                    href={`mailto:jon@lanzar.me?subject=LANZAR%20Support%20Access%20Request&body=Hi%20Jon,%0A%0AMy%20account%20(${encodeURIComponent(currentUser?.email || '')})%20needs%20access%20to%20the%20LANZAR%20Support%20Terminal.`}
+                    className="no-account-button email-button"
+                    title="Send an email to jon@lanzar.me to sign up"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    EMAIL TO SIGN UP
+                  </a>
+
+                  <a
+                    href="https://lanzar.me"
+                    className="no-account-button home-button"
+                    title="Return to LANZAR Homepage"
+                  >
+                    <svg className="action-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    BACK TO LANZAR.ME
+                  </a>
+
+                  <button
+                    className="google-signin-button signout-button"
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={isLoading}
+                  >
+                    {isLoading
+                      ? 'SIGNING OUT...'
+                      : 'SIGN OUT'}
+                  </button>
+                </div>
+
+                <p className="no-account-footnote">
+                  Direct dispatch: <a href="tel:+15085718819">(508) 571-8819</a> &bull; <a href="mailto:jon@lanzar.me">jon@lanzar.me</a>
+                </p>
 
                 {authError && (
                   <p className="signin-error">
