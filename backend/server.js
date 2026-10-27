@@ -33,7 +33,9 @@ import {
   renderNewsletterHtml,
   renderNewsletterText,
   sendTestNewsletter,
-  sendNewsletterBatch
+  sendNewsletterBatch,
+  sendSupportVerificationEmail,
+  sendInquiryConfirmationEmail
 } from './emailService.js'
 import {
   stripe,
@@ -1368,6 +1370,425 @@ app.post('/api/billing/webhook', async (req, res) => {
 })
 
 
+
+
+// =====================================
+// Support Customer Lookup & Caller-Verification (Phase 3)
+// =====================================
+
+const SUPPORT_OTP_SECRET = process.env.SUPPORT_OTP_SECRET || 'lanzar_support_caller_otp_secret_key_2026'
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '***@***.***'
+  const [user, domain] = email.split('@')
+  const visible = user.length <= 2 ? user[0] : user.slice(0, 2)
+  return `${visible}***@${domain}`
+}
+
+function maskPhone(phone) {
+  if (!phone) return null
+  const clean = phone.replace(/\D/g, '')
+  if (clean.length < 4) return '***-***'
+  return `***-***-${clean.slice(-4)}`
+}
+
+/**
+ * Administrative unified customer lookup by name, email, phone, or company.
+ */
+app.get('/api/admin/support/customers', authenticateAdmin, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service unavailable.' })
+  }
+
+  const query = (req.query.q || '').trim().toLowerCase()
+  if (!query) {
+    return res.json({ success: true, customers: [] })
+  }
+
+  try {
+    const matched = new Map()
+
+    // 1. Search customers collection
+    const custSnap = await db.collection('customers').limit(100).get()
+    custSnap.forEach(doc => {
+      const data = doc.data()
+      const cName = (data.customerName || data.name || '').toLowerCase()
+      const cEmail = (data.customerEmail || data.authEmail || data.email || '').toLowerCase()
+      const cPhone = (data.phone || '').toLowerCase()
+      const cBusiness = (data.businessName || data.company || '').toLowerCase()
+
+      if (cName.includes(query) || cEmail.includes(query) || cPhone.includes(query) || cBusiness.includes(query)) {
+        matched.set(doc.id, {
+          uid: doc.id,
+          name: data.customerName || data.name || cEmail.split('@')[0],
+          email: cEmail,
+          phone: data.phone || null,
+          businessName: data.businessName || data.company || null,
+          accountId: data.accountId || null,
+          services: data.services || [],
+          active: data.active === true
+        })
+      }
+    })
+
+    // 2. Search users collection for any newly registered LANZAR ID accounts
+    const userSnap = await db.collection('users').limit(100).get()
+    userSnap.forEach(doc => {
+      if (!matched.has(doc.id)) {
+        const data = doc.data()
+        const uName = (data.displayName || '').toLowerCase()
+        const uEmail = (data.email || '').toLowerCase()
+        const uPhone = (data.phone || '').toLowerCase()
+
+        if (uName.includes(query) || uEmail.includes(query) || uPhone.includes(query)) {
+          matched.set(doc.id, {
+            uid: doc.id,
+            name: data.displayName || uEmail.split('@')[0],
+            email: uEmail,
+            phone: data.phone || null,
+            businessName: data.businessName || null,
+            accountId: data.accountId || null,
+            services: data.services || [],
+            active: data.active === true
+          })
+        }
+      }
+    })
+
+    return res.json({
+      success: true,
+      customers: Array.from(matched.values())
+    })
+  } catch (err) {
+    console.error('[SUPPORT LOOKUP ERROR]', err)
+    return res.status(500).json({ error: 'Customer lookup failed: ' + err.message })
+  }
+})
+
+/**
+ * Initiates an out-of-band verification challenge OTP during a support call.
+ */
+app.post('/api/admin/support/challenge', authenticateAdmin, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service unavailable.' })
+  }
+
+  const { customerUid, channel = 'email' } = req.body
+  if (!customerUid) {
+    return res.status(400).json({ error: 'Customer UID is required.' })
+  }
+
+  try {
+    // 1. Fetch customer contact details
+    let customerEmail = null
+    let customerName = 'Valued Customer'
+
+    const custDoc = await db.collection('customers').doc(customerUid).get()
+    if (custDoc.exists) {
+      const data = custDoc.data()
+      customerEmail = data.customerEmail || data.authEmail || data.email
+      customerName = data.customerName || data.name || customerName
+    } else {
+      const userDoc = await db.collection('users').doc(customerUid).get()
+      if (userDoc.exists) {
+        const data = userDoc.data()
+        customerEmail = data.email
+        customerName = data.displayName || customerName
+      }
+    }
+
+    if (!customerEmail) {
+      return res.status(404).json({ error: 'Customer has no registered email address on file.' })
+    }
+
+    // 2. Generate secure 6-digit OTP
+    const otp = crypto.randomInt(100000, 999999).toString()
+    const otpHash = crypto.createHmac('sha256', SUPPORT_OTP_SECRET).update(otp).digest('hex')
+    const challengeId = `ch_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+
+    // 3. Store challenge in Firestore (NEVER plain OTP)
+    await db.collection('support_challenges').doc(challengeId).set({
+      challengeId,
+      customerUid,
+      adminUid: req.user.uid,
+      adminEmail: req.user.email,
+      channel,
+      destinationMasked: maskEmail(customerEmail),
+      otpHash,
+      attempts: 0,
+      maxAttempts: 3,
+      status: 'pending',
+      expiresAt,
+      createdAt: FieldValue.serverTimestamp()
+    })
+
+    // 4. Send email notification via Brevo
+    await sendSupportVerificationEmail({
+      toEmail: customerEmail,
+      toName: customerName,
+      otpCode: otp
+    })
+
+    console.log(`[SUPPORT CHALLENGE] Initiated challenge ${challengeId} for ${customerUid} by admin ${req.user.email}`)
+
+    return res.json({
+      success: true,
+      challengeId,
+      destinationMasked: maskEmail(customerEmail),
+      expiresAt: expiresAt.toISOString()
+    })
+  } catch (err) {
+    console.error('[SUPPORT CHALLENGE ERROR]', err)
+    return res.status(500).json({ error: 'Failed to initiate verification challenge: ' + err.message })
+  }
+})
+
+/**
+ * Validates the caller-verification code and writes to the immutable audit trail.
+ */
+app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service unavailable.' })
+  }
+
+  const { challengeId, code, ticketId, actionTaken } = req.body
+  if (!challengeId || !code) {
+    return res.status(400).json({ error: 'Challenge ID and 6-digit code are required.' })
+  }
+
+  try {
+    const challengeRef = db.collection('support_challenges').doc(challengeId)
+    const challengeDoc = await challengeRef.get()
+
+    if (!challengeDoc.exists) {
+      return res.status(404).json({ error: 'Verification challenge not found or expired.' })
+    }
+
+    const challenge = challengeDoc.data()
+
+    if (challenge.status !== 'pending') {
+      return res.status(400).json({ error: `Challenge already ${challenge.status}.` })
+    }
+
+    const now = Date.now()
+    const expTime = challenge.expiresAt?.toDate ? challenge.expiresAt.toDate().getTime() : new Date(challenge.expiresAt).getTime()
+    if (now > expTime) {
+      await challengeRef.update({ status: 'expired' })
+      return res.status(400).json({ error: 'Verification challenge has expired. Please initiate a new code.' })
+    }
+
+    if (challenge.attempts >= challenge.maxAttempts) {
+      await challengeRef.update({ status: 'exhausted' })
+      return res.status(429).json({ error: 'Maximum verification attempts exceeded. Please initiate a new challenge.' })
+    }
+
+    // Verify code HMAC
+    const candidateHash = crypto.createHmac('sha256', SUPPORT_OTP_SECRET).update(code.trim()).digest('hex')
+    const isMatch = crypto.timingSafeEqual(Buffer.from(challenge.otpHash), Buffer.from(candidateHash))
+
+    if (!isMatch) {
+      await challengeRef.update({
+        attempts: FieldValue.increment(1),
+        lastFailedAttempt: FieldValue.serverTimestamp()
+      })
+      return res.status(401).json({ error: 'Verification code incorrect. Please try again.' })
+    }
+
+    // Mark challenge verified
+    await challengeRef.update({
+      status: 'verified',
+      verifiedAt: FieldValue.serverTimestamp()
+    })
+
+    // Write immutable audit trail to support_verifications collection
+    const verificationId = `vfy_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
+    await db.collection('support_verifications').doc(verificationId).set({
+      verificationId,
+      challengeId,
+      customerUid: challenge.customerUid,
+      adminUid: req.user.uid,
+      adminEmail: req.user.email,
+      channel: challenge.channel,
+      destinationMasked: challenge.destinationMasked,
+      status: 'verified',
+      ticketId: ticketId || null,
+      actionTaken: actionTaken || 'identity_verification',
+      timestamp: FieldValue.serverTimestamp()
+    })
+
+    console.log(`[SUPPORT VERIFICATION SUCCESS] Verified caller ${challenge.customerUid} by ${req.user.email} (Audit: ${verificationId})`)
+
+    return res.json({
+      success: true,
+      verified: true,
+      customerUid: challenge.customerUid,
+      verificationId
+    })
+  } catch (err) {
+    console.error('[SUPPORT VERIFY ERROR]', err)
+    return res.status(500).json({ error: 'Failed to complete verification: ' + err.message })
+  }
+})
+
+// =====================================
+// Public Inquiries & Guest Ticket Intake (Phase 5)
+// =====================================
+
+app.post('/api/inquiries', async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service unavailable.' })
+  }
+
+  const { name, email, subject, message, serviceCategory = 'general' } = req.body
+
+  if (!email || !subject || !message) {
+    return res.status(400).json({ error: 'Email, subject, and message are required.' })
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({ error: 'Invalid email address.' })
+  }
+
+  if (message.length > 5000) {
+    return res.status(400).json({ error: 'Message exceeds maximum allowable length of 5000 characters.' })
+  }
+
+  try {
+    // 1. Check if email belongs to an existing customer
+    let matchedCustomerUid = null
+    let matchedAccountId = null
+
+    const custQuery = await db.collection('customers').where('customerEmail', '==', normalizedEmail).limit(1).get()
+    if (!custQuery.empty) {
+      matchedCustomerUid = custQuery.docs[0].id
+      matchedAccountId = custQuery.docs[0].data().accountId || null
+    } else {
+      const userQuery = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get()
+      if (!userQuery.empty) {
+        matchedCustomerUid = userQuery.docs[0].id
+        matchedAccountId = userQuery.docs[0].data().accountId || null
+      }
+    }
+
+    const ticketId = `tkt_${Date.now()}`
+    const isGuest = !matchedCustomerUid
+    const claimToken = isGuest ? crypto.randomBytes(24).toString('hex') : null
+    const claimExpiresAt = isGuest ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null // 7 days
+
+    await db.collection('tickets').doc(ticketId).set({
+      id: ticketId,
+      ticketId,
+      customerUid: matchedCustomerUid,
+      accountId: matchedAccountId,
+      requesterName: (name || normalizedEmail.split('@')[0]).trim(),
+      requesterEmail: normalizedEmail,
+      subject: subject.trim(),
+      message: message.trim(),
+      serviceCategory,
+      status: 'open',
+      priority: 'medium',
+      isGuest,
+      claimToken,
+      claimExpiresAt,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    })
+
+    const claimUrl = isGuest ? `https://portal.lanzar.me/claim-ticket?id=${ticketId}&token=${claimToken}` : `https://portal.lanzar.me/tickets/${ticketId}`
+
+    // Send confirmation to requester
+    await sendInquiryConfirmationEmail({
+      toEmail: normalizedEmail,
+      toName: name,
+      ticketId,
+      subject,
+      claimUrl: isGuest ? claimUrl : null
+    })
+
+    // Send notification to staff
+    await sendNewTicketNotification({
+      ticketId,
+      title: `[INQUIRY] ${subject}`,
+      description: message,
+      customerName: name || normalizedEmail,
+      customerEmail: normalizedEmail,
+      priority: 'medium',
+      serviceCategory
+    }).catch(err => console.warn('[INQUIRY NOTIFICATION WARN]', err.message))
+
+    console.log(`[INQUIRY CREATED] Ticket ${ticketId} created (isGuest: ${isGuest}) for ${normalizedEmail}`)
+
+    return res.json({
+      success: true,
+      ticketId,
+      isGuest,
+      message: 'Inquiry submitted successfully.'
+    })
+  } catch (err) {
+    console.error('[INQUIRY ERROR]', err)
+    return res.status(500).json({ error: 'Failed to process inquiry: ' + err.message })
+  }
+})
+
+/**
+ * Authenticated claim of a guest ticket when an account is registered or logged in.
+ */
+app.post('/api/tickets/claim', authenticateUser, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service unavailable.' })
+  }
+
+  const { ticketId, claimToken } = req.body
+  if (!ticketId || !claimToken) {
+    return res.status(400).json({ error: 'Ticket ID and claim token are required.' })
+  }
+
+  try {
+    const ticketRef = db.collection('tickets').doc(ticketId)
+    const ticketDoc = await ticketRef.get()
+
+    if (!ticketDoc.exists) {
+      return res.status(404).json({ error: 'Ticket not found.' })
+    }
+
+    const ticket = ticketDoc.data()
+    if (!ticket.isGuest) {
+      return res.status(400).json({ error: 'This ticket has already been claimed or linked to an account.' })
+    }
+
+    if (ticket.claimToken !== claimToken) {
+      return res.status(401).json({ error: 'Invalid claim token.' })
+    }
+
+    const now = Date.now()
+    const expTime = ticket.claimExpiresAt?.toDate ? ticket.claimExpiresAt.toDate().getTime() : new Date(ticket.claimExpiresAt).getTime()
+    if (now > expTime) {
+      return res.status(400).json({ error: 'Ticket claim link has expired.' })
+    }
+
+    // Claim ticket
+    await ticketRef.update({
+      isGuest: false,
+      customerUid: req.user.uid,
+      claimToken: null,
+      claimedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    })
+
+    console.log(`[TICKET CLAIMED] Ticket ${ticketId} claimed by user ${req.user.uid}`)
+
+    return res.json({
+      success: true,
+      ticketId,
+      message: 'Ticket successfully associated with your account.'
+    })
+  } catch (err) {
+    console.error('[TICKET CLAIM ERROR]', err)
+    return res.status(500).json({ error: 'Failed to claim ticket: ' + err.message })
+  }
+})
 
 // =====================================
 // Start Server

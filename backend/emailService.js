@@ -498,3 +498,60 @@ export async function sendNewsletterBatch(subscribers, subject, content) {
   console.log(`[NEWSLETTER] Batch dispatch completed: ${results.success} accepted, ${results.failures} failed.`)
   return results
 }
+
+
+/**
+ * Dispatches an out-of-band support verification challenge OTP to a customer.
+ */
+export async function sendSupportVerificationEmail({ toEmail, toName, otpCode }) {
+  const subject = `Your LANZAR Support Verification Code: ${otpCode}`
+  const textContent = `Your LANZAR Support verification code is: ${otpCode}\n\nThis single-use code expires in 10 minutes.\nIf you did not request support assistance, please contact security@lanzar.me immediately.`
+
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 2px solid #002244; border-radius: 8px; background-color: #ffffff;">
+      <div style="border-bottom: 3px solid #ff5500; padding-bottom: 12px; margin-bottom: 20px;">
+        <h2 style="color: #002244; margin: 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px;">LANZAR Support Verification</h2>
+      </div>
+      <p style="color: #333333; font-size: 15px; line-height: 1.5; margin-bottom: 16px;">
+        Hello ${toName || 'there'},
+      </p>
+      <p style="color: #333333; font-size: 15px; line-height: 1.5; margin-bottom: 24px;">
+        A LANZAR support specialist has initiated an identity verification challenge for your account during an active support session. Please provide this 6-digit code to your support specialist:
+      </p>
+      <div style="background-color: #f0f4f8; border: 2px dashed #2a728f; border-radius: 6px; padding: 20px; text-align: center; margin-bottom: 24px;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #ff5500;">${otpCode}</span>
+      </div>
+      <p style="color: #666666; font-size: 13px; line-height: 1.4; margin-bottom: 0;">
+        <strong>Security Notice:</strong> This single-use code is valid for 10 minutes. LANZAR will never ask for your password or billing credentials over the phone. If you did not initiate this call, please email security@lanzar.me immediately.
+      </p>
+    </div>
+  `
+
+  return sendViaBrevo(toEmail, toName, subject, textContent, {
+    htmlContent,
+    senderName: 'LANZAR Support Security'
+  })
+}
+
+/**
+ * Sends a confirmation email to a guest or prospective customer submitting a public inquiry.
+ */
+export async function sendInquiryConfirmationEmail({ toEmail, toName, ticketId, subject, claimUrl }) {
+  const emailSubject = `Inquiry Received: [${ticketId}] ${subject}`
+  const textContent = `Thank you for contacting LANZAR.\n\nYour inquiry [${ticketId}] has been received and routed to our engineering and support specialists.\n\nSubject: ${subject}\n\nIf you have a LANZAR ID or wish to claim this ticket, visit:\n${claimUrl || 'https://portal.lanzar.me'}\n\nLANZAR Team`
+
+  const htmlContent = `
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 2px solid #002244; border-radius: 8px;">
+      <h2 style="color: #002244; margin-top: 0;">Inquiry Received [${ticketId}]</h2>
+      <p style="color: #333; font-size: 15px;">Hello ${toName || 'there'},</p>
+      <p style="color: #333; font-size: 15px;">Thank you for reaching out to LANZAR. Your inquiry regarding <strong>${subject}</strong> has been received by our technical operations desk.</p>
+      ${claimUrl ? `<p style="margin: 20px 0;"><a href="${claimUrl}" style="background-color: #ff5500; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-weight: bold; display: inline-block;">View & Track Ticket</a></p>` : ''}
+      <p style="color: #777; font-size: 13px;">Our team will respond to this email address shortly.</p>
+    </div>
+  `
+
+  return sendViaBrevo(toEmail, toName, emailSubject, textContent, {
+    htmlContent,
+    senderName: 'LANZAR Operations'
+  })
+}
