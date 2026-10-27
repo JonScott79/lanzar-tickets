@@ -35,6 +35,14 @@ import {
   sendTestNewsletter,
   sendNewsletterBatch
 } from './emailService.js'
+import {
+  stripe,
+  SERVICE_CATALOG,
+  createCheckoutSession,
+  createBillingPortalSession,
+  getCustomerBillingStatus,
+  processStripeWebhookEvent
+} from './billingService.js'
 
 dotenv.config()
 
@@ -69,7 +77,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-app.use(express.json())
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf
+  }
+}))
 
 // =====================================
 // Firebase Admin SDK Config
@@ -1234,6 +1246,124 @@ app.get('/api/admin/newsletter/dispatches', authenticateAdmin, async (req, res) 
   } catch (error) {
     console.error('[ADMIN ERROR] Failed to fetch dispatches:', error)
     return res.status(500).json({ error: 'Failed to fetch dispatches: ' + error.message })
+  }
+})
+
+// =====================================
+// LANZAR Billing & Stripe Endpoints
+// =====================================
+
+// Public/Authenticated: Get Service Catalog
+app.get('/api/billing/catalog', (req, res) => {
+  return res.json({
+    success: true,
+    services: Object.values(SERVICE_CATALOG)
+  })
+})
+
+// Authenticated Customer: Get Current Billing & Entitlement Status
+app.get('/api/billing/customer-status', authenticateUser, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
+  try {
+    const status = await getCustomerBillingStatus(req.user.uid, db)
+    return res.json({ success: true, ...status })
+  } catch (error) {
+    console.error('[BILLING ERROR] Failed to fetch customer status:', error)
+    return res.status(500).json({ error: 'Failed to fetch billing status: ' + error.message })
+  }
+})
+
+// Authenticated Customer: Create Stripe Checkout Session
+app.post('/api/billing/create-checkout-session', authenticateUser, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
+  const { serviceId, returnUrl } = req.body
+  if (!serviceId) {
+    return res.status(400).json({ error: 'Service ID is required.' })
+  }
+
+  try {
+    const session = await createCheckoutSession({
+      uid: req.user.uid,
+      email: req.user.email,
+      customerName: req.user.name || req.user.email,
+      serviceId,
+      returnUrl
+    }, db)
+
+    return res.json({
+      success: true,
+      sessionId: session.sessionId,
+      url: session.url
+    })
+  } catch (error) {
+    console.error('[BILLING ERROR] Checkout session creation failed:', error)
+    return res.status(500).json({ error: 'Checkout session creation failed: ' + error.message })
+  }
+})
+
+// Authenticated Customer: Create Stripe Customer Portal Session
+app.post('/api/billing/create-portal-session', authenticateUser, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
+  const { returnUrl } = req.body
+
+  try {
+    const session = await createBillingPortalSession({
+      uid: req.user.uid,
+      email: req.user.email,
+      customerName: req.user.name || req.user.email,
+      returnUrl
+    }, db)
+
+    return res.json({
+      success: true,
+      url: session.url
+    })
+  } catch (error) {
+    console.error('[BILLING ERROR] Portal session creation failed:', error)
+    return res.status(500).json({ error: 'Portal session creation failed: ' + error.message })
+  }
+})
+
+// Public Webhook: Verified Stripe Event Processor
+app.post('/api/billing/webhook', async (req, res) => {
+  if (!db) {
+    return res.status(500).send('Database service unavailable.')
+  }
+
+  const sig = req.headers['stripe-signature']
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  let event
+
+  if (stripe && webhookSecret) {
+    try {
+      if (!req.rawBody) {
+        throw new Error('Raw body buffer not found for signature verification.')
+      }
+      event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret)
+    } catch (err) {
+      console.error('[STRIPE WEBHOOK ERROR] Signature verification failed:', err.message)
+      return res.status(400).send(`Webhook Signature Verification Error: ${err.message}`)
+    }
+  } else {
+    // Development or test mode without live signature secret
+    event = req.body
+  }
+
+  try {
+    const result = await processStripeWebhookEvent(event, db)
+    return res.json({ received: true, ...result })
+  } catch (error) {
+    console.error('[STRIPE WEBHOOK ERROR] Event processing failed:', error)
+    return res.status(500).json({ error: 'Webhook processing failed: ' + error.message })
   }
 })
 
