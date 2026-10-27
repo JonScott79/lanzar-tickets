@@ -24,11 +24,16 @@ import { cert, initializeApp, getApps } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import { 
   sendNewTicketNotification, 
   sendCustomerConfirmation,
   sendWelcomeEmail,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  renderNewsletterHtml,
+  renderNewsletterText,
+  sendTestNewsletter,
+  sendNewsletterBatch
 } from './emailService.js'
 
 dotenv.config()
@@ -39,13 +44,27 @@ dotenv.config()
 
 const app = express()
 
-// Allow CORS from production domain and local Vite dev servers
+// Dynamic CORS configuration allowing LANZAR domains and development environments
+const allowedOrigins = [
+  'https://tickets.lanzar.me',
+  'https://portal.lanzar.me',
+  'https://lanzar.me',
+  'https://www.lanzar.me'
+]
+
 app.use(cors({
-  origin: [
-    'https://tickets.lanzar.me',
-    'http://localhost:5173',
-    'http://localhost:5174'
-  ],
+  origin: (origin, callback) => {
+    // Allow non-browser requests or server-to-server
+    if (!origin) return callback(null, true)
+    if (
+      allowedOrigins.includes(origin) ||
+      /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+    ) {
+      return callback(null, true)
+    }
+    return callback(null, false)
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
@@ -807,6 +826,414 @@ app.post('/api/admin/announcements', authenticateAdmin, async (req, res) => {
   } catch (error) {
     console.error('[BACKEND ERROR] Announcement dispatch failed:', error)
     return res.status(500).json({ error: 'Failed to dispatch announcement: ' + error.message })
+  }
+})
+
+// =====================================
+// LANZAR Dispatch Newsletter Endpoints
+// =====================================
+
+// In-Memory Rate Limiter for Public Subscription Endpoint
+const subscribeRateLimit = new Map()
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const RATE_LIMIT_MAX_ATTEMPTS = 5
+
+function isRateLimited(ip) {
+  const now = Date.now()
+  const record = subscribeRateLimit.get(ip)
+  if (!record || now - record.startTime > RATE_LIMIT_WINDOW_MS) {
+    subscribeRateLimit.set(ip, { count: 1, startTime: now })
+    return false
+  }
+  record.count++
+  return record.count > RATE_LIMIT_MAX_ATTEMPTS
+}
+
+// Cleanup stale rate limit records
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, record] of subscribeRateLimit.entries()) {
+    if (now - record.startTime > RATE_LIMIT_WINDOW_MS) {
+      subscribeRateLimit.delete(ip)
+    }
+  }
+}, 30 * 60 * 1000)
+
+function validateEmail(email) {
+  if (!email || typeof email !== 'string') return null
+  const normalized = email.trim().toLowerCase()
+  if (normalized.length > 254) return null
+  const regex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
+  if (!regex.test(normalized)) return null
+  return normalized
+}
+
+function renderUnsubscribeHtml(title, message) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} &bull; LANZAR</title>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      background-color: #0F172A;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; color: #102A43;
+    }
+    .card {
+      background: #FAF6F0;
+      border: 2px solid #E2B84D;
+      border-radius: 8px;
+      max-width: 520px;
+      margin: 20px;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    h1 {
+      font-size: 24px;
+      color: #102A43;
+      margin-top: 0;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    p {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #334E68;
+      margin-bottom: 28px;
+    }
+    a.btn {
+      display: inline-block;
+      background-color: #F46B45;
+      color: #FFFFFF;
+      text-decoration: none;
+      font-weight: bold;
+      padding: 12px 28px;
+      border-radius: 50px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+    a.btn:hover { background-color: #D85430; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size: 32px; margin-bottom: 16px;">&#128640;</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <a href="https://lanzar.me" class="btn">Return to LANZAR</a>
+  </div>
+</body>
+</html>`
+}
+
+// Public: Subscribe to newsletter
+app.post('/api/newsletter/subscribe', async (req, res) => {
+  // Honeypot bot protection
+  if (req.body.hp || req.body.website || req.body.b_name) {
+    return res.json({ success: true, message: 'Transmission confirmed! Welcome aboard the LANZAR Dispatch.' })
+  }
+
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown'
+  if (isRateLimited(clientIp)) {
+    return res.status(429).json({ error: 'Too many subscription attempts from this station. Please try again shortly.' })
+  }
+
+  const email = validateEmail(req.body.email)
+  if (!email) {
+    return res.status(400).json({ error: 'Please provide a valid email address.' })
+  }
+
+  if (!db) {
+    return res.status(500).json({ error: 'Database service currently unavailable. Please try again later.' })
+  }
+
+  try {
+    const docId = crypto.createHash('sha256').update(email).digest('hex')
+    const subRef = db.collection('subscribers').doc(docId)
+    const existing = await subRef.get()
+
+    if (existing.exists) {
+      const data = existing.data()
+      if (data.status === 'unsubscribed') {
+        // Preserve unsubscription status without leaking state
+        return res.json({
+          success: true,
+          message: 'Transmission received. If eligible, your subscription has been recorded.'
+        })
+      }
+      // If already active, touch timestamp
+      await subRef.update({
+        updatedAt: FieldValue.serverTimestamp()
+      })
+      return res.json({
+        success: true,
+        message: 'You are subscribed to the LANZAR Dispatch.'
+      })
+    }
+
+    // New active subscriber
+    const unsubscribeToken = crypto.randomBytes(32).toString('hex')
+    await subRef.set({
+      email,
+      status: 'active',
+      source: req.body.source || 'homepage',
+      consentMethod: 'homepage_modal',
+      unsubscribeToken,
+      subscribedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    })
+
+    return res.json({
+      success: true,
+      message: 'Transmission confirmed! Welcome aboard the LANZAR Dispatch.'
+    })
+  } catch (error) {
+    console.error('[NEWSLETTER ERROR] Subscription failed:', error)
+    return res.status(500).json({ error: 'Failed to process subscription: ' + error.message })
+  }
+})
+
+// Public: Unsubscribe Handler
+async function handleUnsubscribe(token, res) {
+  if (!token || typeof token !== 'string') {
+    return res.status(400).send(renderUnsubscribeHtml('Invalid Token', 'The unsubscribe token provided is invalid.'))
+  }
+
+  if (!db) {
+    return res.status(500).send(renderUnsubscribeHtml('System Error', 'Database service currently unavailable.'))
+  }
+
+  try {
+    const snap = await db.collection('subscribers').where('unsubscribeToken', '==', token).limit(1).get()
+    if (snap.empty) {
+      return res.status(404).send(renderUnsubscribeHtml('Link Expired or Not Found', 'This subscription link is not recognized or has already been removed.'))
+    }
+
+    const docRef = snap.docs[0].ref
+    await docRef.update({
+      status: 'unsubscribed',
+      unsubscribedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    })
+
+    return res.send(renderUnsubscribeHtml('Unsubscribed Successfully', 'Your email address has been unsubscribed from the LANZAR Dispatch. You will receive no further transmissions.'))
+  } catch (error) {
+    console.error('[NEWSLETTER ERROR] Unsubscribe failed:', error)
+    return res.status(500).send(renderUnsubscribeHtml('Error', 'Unable to process unsubscribe request: ' + error.message))
+  }
+}
+
+app.get('/api/newsletter/unsubscribe', async (req, res) => {
+  const token = req.query.token
+  return handleUnsubscribe(token, res)
+})
+
+app.post('/api/newsletter/unsubscribe', async (req, res) => {
+  const token = req.query.token || req.body?.token
+  return handleUnsubscribe(token, res)
+})
+
+// =====================================
+// Admin Newsletter Management Endpoints
+// =====================================
+
+// Admin: Get subscriber stats and list
+app.get('/api/admin/newsletter/subscribers', authenticateAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('subscribers').get()
+    const subscribers = []
+    let active = 0
+    let unsubscribed = 0
+
+    snap.forEach(doc => {
+      const d = doc.data()
+      if (d.status === 'active') active++
+      if (d.status === 'unsubscribed') unsubscribed++
+      subscribers.push({
+        id: doc.id,
+        email: d.email,
+        status: d.status || 'active',
+        source: d.source || 'homepage',
+        subscribedAt: d.subscribedAt ? d.subscribedAt.toDate() : null,
+        unsubscribedAt: d.unsubscribedAt ? d.unsubscribedAt.toDate() : null
+      })
+    })
+
+    subscribers.sort((a, b) => {
+      const timeA = a.subscribedAt ? new Date(a.subscribedAt).getTime() : 0
+      const timeB = b.subscribedAt ? new Date(b.subscribedAt).getTime() : 0
+      return timeB - timeA
+    })
+
+    return res.json({
+      success: true,
+      total: subscribers.length,
+      active,
+      unsubscribed,
+      subscribers
+    })
+  } catch (error) {
+    console.error('[ADMIN ERROR] Failed to fetch subscribers:', error)
+    return res.status(500).json({ error: 'Failed to fetch subscribers: ' + error.message })
+  }
+})
+
+// Admin: Update subscriber status
+app.post('/api/admin/newsletter/subscriber/status', authenticateAdmin, async (req, res) => {
+  const { id, status } = req.body
+  if (!id || !['active', 'unsubscribed'].includes(status)) {
+    return res.status(400).json({ error: 'Valid subscriber ID and status (active/unsubscribed) are required.' })
+  }
+
+  try {
+    const docRef = db.collection('subscribers').doc(id)
+    const existing = await docRef.get()
+    if (!existing.exists) {
+      return res.status(404).json({ error: 'Subscriber record not found.' })
+    }
+
+    const updates = {
+      status,
+      updatedAt: FieldValue.serverTimestamp()
+    }
+    if (status === 'unsubscribed') {
+      updates.unsubscribedAt = FieldValue.serverTimestamp()
+    }
+
+    await docRef.update(updates)
+    return res.json({ success: true, message: `Subscriber status updated to ${status}.` })
+  } catch (error) {
+    console.error('[ADMIN ERROR] Failed to update subscriber status:', error)
+    return res.status(500).json({ error: 'Failed to update subscriber status: ' + error.message })
+  }
+})
+
+// Admin: Send test dispatch to admin
+app.post('/api/admin/newsletter/send-test', authenticateAdmin, async (req, res) => {
+  const { subject, content, testEmail } = req.body
+  if (!subject || !content) {
+    return res.status(400).json({ error: 'Subject and content are required.' })
+  }
+
+  const recipient = testEmail || req.admin.email || 'jon@lanzar.me'
+
+  try {
+    const result = await sendTestNewsletter({ toEmail: recipient, subject, content })
+    return res.json({ success: true, recipient, messageId: result.messageId })
+  } catch (error) {
+    console.error('[ADMIN ERROR] Test dispatch failed:', error)
+    return res.status(500).json({ error: 'Test dispatch failed: ' + error.message })
+  }
+})
+
+// Admin: Send broadcast to active subscribers
+let isBroadcastRunning = false
+
+app.post('/api/admin/newsletter/send', authenticateAdmin, async (req, res) => {
+  const { subject, content } = req.body
+  if (!subject || !content) {
+    return res.status(400).json({ error: 'Subject and content are required.' })
+  }
+
+  if (isBroadcastRunning) {
+    return res.status(409).json({ error: 'A broadcast is currently in flight. Please wait for it to complete.' })
+  }
+
+  try {
+    isBroadcastRunning = true
+
+    const activeSnap = await db.collection('subscribers').where('status', '==', 'active').get()
+    if (activeSnap.empty) {
+      isBroadcastRunning = false
+      return res.status(400).json({ error: 'No active subscribers found to broadcast to.' })
+    }
+
+    const subscribers = []
+    activeSnap.forEach(doc => {
+      const d = doc.data()
+      if (d.email) {
+        subscribers.push({
+          id: doc.id,
+          email: d.email,
+          unsubscribeToken: d.unsubscribeToken
+        })
+      }
+    })
+
+    const dispatchRef = await db.collection('newsletter_dispatches').add({
+      subject,
+      contentSnippet: content.slice(0, 300),
+      status: 'sending',
+      recipientCount: subscribers.length,
+      acceptedCount: 0,
+      failedCount: 0,
+      sentBy: req.admin.uid,
+      sentByEmail: req.admin.email || 'Admin',
+      createdAt: FieldValue.serverTimestamp(),
+      sentAt: FieldValue.serverTimestamp()
+    })
+
+    const results = await sendNewsletterBatch(subscribers, subject, content)
+
+    await dispatchRef.update({
+      status: results.failures === 0 ? 'completed' : (results.success > 0 ? 'completed_with_errors' : 'failed'),
+      acceptedCount: results.success,
+      failedCount: results.failures,
+      errorSummary: results.failedEmails.length > 0 ? JSON.stringify(results.failedEmails.slice(0, 10)) : null,
+      completedAt: FieldValue.serverTimestamp()
+    })
+
+    isBroadcastRunning = false
+
+    return res.json({
+      success: true,
+      dispatchId: dispatchRef.id,
+      recipientCount: subscribers.length,
+      accepted: results.success,
+      failed: results.failures
+    })
+  } catch (error) {
+    isBroadcastRunning = false
+    console.error('[ADMIN ERROR] Newsletter broadcast failed:', error)
+    return res.status(500).json({ error: 'Newsletter broadcast failed: ' + error.message })
+  }
+})
+
+// Admin: Get broadcast history
+app.get('/api/admin/newsletter/dispatches', authenticateAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('newsletter_dispatches')
+      .orderBy('sentAt', 'desc')
+      .limit(30)
+      .get()
+
+    const dispatches = []
+    snap.forEach(doc => {
+      const d = doc.data()
+      dispatches.push({
+        id: doc.id,
+        subject: d.subject,
+        status: d.status,
+        recipientCount: d.recipientCount || 0,
+        acceptedCount: d.acceptedCount || 0,
+        failedCount: d.failedCount || 0,
+        sentByEmail: d.sentByEmail || 'Admin',
+        sentAt: d.sentAt ? d.sentAt.toDate() : null
+      })
+    })
+
+    return res.json({ success: true, dispatches })
+  } catch (error) {
+    console.error('[ADMIN ERROR] Failed to fetch dispatches:', error)
+    return res.status(500).json({ error: 'Failed to fetch dispatches: ' + error.message })
   }
 })
 
