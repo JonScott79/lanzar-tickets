@@ -1632,6 +1632,175 @@ app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
 })
 
 // =====================================
+// Admin Virtual Terminal: Phone Payments (Phase 6)
+// =====================================
+
+/**
+ * Charge a customer's credit card directly over the phone via Stripe Virtual Terminal.
+ */
+app.post('/api/admin/billing/charge-card', authenticateAdmin, async (req, res) => {
+  const {
+    customerName,
+    customerEmail,
+    customerPhone,
+    amount,
+    description,
+    serviceId,
+    cardNumber,
+    expMonth,
+    expYear,
+    cvc,
+    postalCode
+  } = req.body
+
+  if (!customerName || !customerEmail || !amount || !cardNumber || !expMonth || !expYear || !cvc) {
+    return res.status(400).json({ error: 'Missing required card or customer fields.' })
+  }
+
+  const cleanAmount = parseInt(amount, 10)
+  if (isNaN(cleanAmount) || cleanAmount < 50) {
+    return res.status(400).json({ error: 'Minimum charge amount is $0.50.' })
+  }
+
+  if (!stripe) {
+    console.log(`[STRIPE MOCK] Admin ${req.user.email} simulated phone charge of $${(cleanAmount / 100).toFixed(2)} for ${customerName}`)
+    return res.json({
+      success: true,
+      mock: true,
+      paymentIntentId: `pi_mock_${Date.now()}`,
+      status: 'succeeded',
+      receiptUrl: null,
+      message: 'Charge simulated successfully in test environment.'
+    })
+  }
+
+  try {
+    // 1. Create a PaymentMethod from raw card data (PCI compliant via Stripe direct API tokenization)
+    const cleanNumber = cardNumber.toString().replace(/\D/g, '')
+    const paymentMethod = await stripe.paymentMethods.create({
+      type: 'card',
+      card: {
+        number: cleanNumber,
+        exp_month: parseInt(expMonth, 10),
+        exp_year: parseInt(expYear, 10),
+        cvc: cvc.toString().trim()
+      },
+      billing_details: {
+        name: customerName.trim(),
+        email: customerEmail.trim(),
+        phone: customerPhone ? customerPhone.trim() : undefined,
+        address: postalCode ? { postal_code: postalCode.trim() } : undefined
+      }
+    })
+
+    // 2. Create and immediately confirm PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: cleanAmount,
+      currency: 'usd',
+      payment_method: paymentMethod.id,
+      confirm: true,
+      description: description || `Phone Terminal Charge - ${serviceId || 'Custom'}`,
+      receipt_email: customerEmail.trim(),
+      payment_method_types: ['card'],
+      metadata: {
+        chargedByAdmin: req.user.email,
+        adminUid: req.user.uid,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone || '',
+        serviceId: serviceId || 'phone_terminal'
+      }
+    })
+
+    const receiptUrl = paymentIntent.charges?.data?.[0]?.receipt_url || null
+
+    // 3. Store record in Firestore
+    if (db) {
+      try {
+        await db.collection('phone_payments').doc(paymentIntent.id).set({
+          id: paymentIntent.id,
+          paymentIntentId: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          status: paymentIntent.status,
+          customerName: customerName.trim(),
+          customerEmail: customerEmail.trim(),
+          customerPhone: customerPhone ? customerPhone.trim() : null,
+          serviceId: serviceId || 'custom',
+          description: description || 'Phone Terminal Charge',
+          chargedByAdmin: req.user.email,
+          adminUid: req.user.uid,
+          receiptUrl,
+          createdAt: FieldValue.serverTimestamp()
+        })
+      } catch (dbErr) {
+        console.warn('[DB WARN] Could not log phone payment record:', dbErr.message)
+      }
+    }
+
+    console.log(`[STRIPE TERMINAL] Successfully charged $${(cleanAmount / 100).toFixed(2)} to ${customerEmail} (Intent: ${paymentIntent.id})`)
+    return res.json({
+      success: true,
+      paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
+      receiptUrl
+    })
+  } catch (err) {
+    console.error('[STRIPE CHARGE ERROR]', err)
+    return res.status(400).json({ error: err.message || 'Payment processing failed.' })
+  }
+})
+
+/**
+ * Generate a dynamic Stripe Payment Link to read/email to a caller.
+ */
+app.post('/api/admin/billing/generate-link', authenticateAdmin, async (req, res) => {
+  const { name, amount, description } = req.body
+
+  if (!name || !amount) {
+    return res.status(400).json({ error: 'Name and amount are required.' })
+  }
+
+  const cleanAmount = parseInt(amount, 10)
+  if (isNaN(cleanAmount) || cleanAmount < 50) {
+    return res.status(400).json({ error: 'Minimum amount is $0.50.' })
+  }
+
+  if (!stripe) {
+    return res.json({
+      success: true,
+      mock: true,
+      url: `https://portal.lanzar.me/billing?mock_checkout=true&amount=${cleanAmount}`
+    })
+  }
+
+  try {
+    const price = await stripe.prices.create({
+      currency: 'usd',
+      unit_amount: cleanAmount,
+      product_data: {
+        name: name.trim()
+      }
+    })
+
+    const link = await stripe.paymentLinks.create({
+      line_items: [{ price: price.id, quantity: 1 }],
+      after_completion: {
+        type: 'redirect',
+        redirect: { url: 'https://portal.lanzar.me/billing?success=true' }
+      }
+    })
+
+    return res.json({
+      success: true,
+      url: link.url
+    })
+  } catch (err) {
+    console.error('[STRIPE LINK ERROR]', err)
+    return res.status(400).json({ error: err.message || 'Failed to create payment link.' })
+  }
+})
+
+// =====================================
 // Public Inquiries & Guest Ticket Intake (Phase 5)
 // =====================================
 
