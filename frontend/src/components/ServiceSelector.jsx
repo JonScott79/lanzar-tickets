@@ -2,29 +2,39 @@ import { useState, useEffect } from 'react'
 import { getFirestore, collection, getDocs } from 'firebase/firestore'
 import app from '../firebase/config.js'
 
-/*
-    ServiceSelector.jsx
-
-    LANZAR Support Tickets service selection component.
-
-    Responsibilities
-
-    - Display available LANZAR services
-    - Display service-specific icons
-    - Track the selected service
-    - Provide a reusable service selection interface
-*/
-
-// ==========================
-// Component
-// ==========================
+const FALLBACK_SERVICES = [
+  {
+    id: 'it',
+    name: 'Managed IT Support',
+    description: 'Technical support, workstations, printers, Wi-Fi, and systems.',
+    icon: '/images/icons/it.svg',
+    ticketEligible: true,
+    active: true
+  },
+  {
+    id: 'web',
+    name: 'Web Services',
+    description: 'Websites, hosting, DNS, and digital platforms.',
+    icon: '/images/icons/web.svg',
+    ticketEligible: true,
+    active: true
+  },
+  {
+    id: 'threadline',
+    name: 'Threadline App Support',
+    description: 'Threadline forensic intelligence support and assistance.',
+    icon: '/images/icons/threadline.svg',
+    ticketEligible: true,
+    active: true
+  }
+]
 
 function ServiceSelector({
   selectedService,
   onSelect,
-  services = [], // This is the array of service string IDs the user is authorized for
+  services = [],
 }) {
-  const [globalServices, setGlobalServices] = useState([])
+  const [globalServices, setGlobalServices] = useState(FALLBACK_SERVICES)
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -39,8 +49,10 @@ function ServiceSelector({
               list.push({ id: doc.id, ...data })
             }
           })
-          setGlobalServices(list)
-          return
+          if (list.length > 0) {
+            setGlobalServices(list)
+            return
+          }
         }
       } catch (err) {
         console.warn('Direct Firestore service load failed, falling back to API:', err)
@@ -50,19 +62,22 @@ function ServiceSelector({
         const apiUrl = import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api/services` : '/api/services'
         const res = await fetch(apiUrl)
         const data = await res.json()
-        if (data.success) {
+        if (data.success && data.services?.length > 0) {
           const list = data.services.filter(doc => doc.active && doc.ticketEligible)
-          setGlobalServices(list)
+          if (list.length > 0) {
+            setGlobalServices(list)
+          }
         }
       } catch (err) {
-        console.error('Failed to load global services', err)
+        console.warn('Using fallback services list')
       }
     }
     fetchServices()
   }, [])
 
+  const effectiveServiceIds = services && services.length > 0 ? services : ['it', 'web']
   const availableServices = globalServices
-    .filter(service => services.includes(service.id))
+    .filter(service => effectiveServiceIds.includes(service.id))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
@@ -98,14 +113,8 @@ function ServiceSelector({
 
           <span className="service-divider" />
 
-          <span className="service-content">
-            <span className="service-name">
-              {service.name}
-            </span>
-
-            <span className="service-description">
-              {service.description}
-            </span>
+          <span className="service-label">
+            {service.name}
           </span>
         </button>
       ))}

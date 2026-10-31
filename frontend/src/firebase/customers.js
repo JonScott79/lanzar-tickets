@@ -14,6 +14,7 @@
 import {
   doc,
   getDoc,
+  setDoc,
   getFirestore,
 } from 'firebase/firestore'
 
@@ -52,7 +53,7 @@ export async function getCustomer(uid) {
       }
 
       // Resolve account-level services if the user has an accountId
-      let services = userData.services || []
+      let services = userData.services && userData.services.length > 0 ? userData.services : ['it', 'web']
 
       if (userData.accountId) {
         try {
@@ -61,7 +62,9 @@ export async function getCustomer(uid) {
 
           if (accountSnapshot.exists()) {
             const accountData = accountSnapshot.data()
-            services = accountData.services || services
+            if (accountData.services && accountData.services.length > 0) {
+              services = accountData.services
+            }
           }
         } catch (accountError) {
           console.log('[AUTH] Account lookup skipped:', accountError.message)
@@ -95,9 +98,11 @@ export async function getCustomer(uid) {
       return null
     }
 
+    const data = customerSnapshot.data()
     return {
       id: customerSnapshot.id,
-      ...customerSnapshot.data(),
+      ...data,
+      services: data.services && data.services.length > 0 ? data.services : ['it', 'web']
     }
   } catch (customerLookupError) {
     console.error('[AUTH ERROR] customers/{uid} lookup failed:', customerLookupError.message)
@@ -121,4 +126,46 @@ export async function getAuthorizedCustomer(uid) {
   }
 
   return customer
+}
+
+export async function getOrCreateAuthorizedCustomer(firebaseUser) {
+  if (!firebaseUser?.uid) return null
+
+  const existingCustomer = await getAuthorizedCustomer(firebaseUser.uid)
+  if (existingCustomer) {
+    return existingCustomer
+  }
+
+  // Auto-provision initial customer profile with default IT & Web ticket access
+  const displayName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Customer')
+  const email = firebaseUser.email || ''
+
+  const newProfile = {
+    displayName,
+    email,
+    active: true,
+    role: 'USER',
+    services: ['it', 'web'],
+    createdAt: new Date().toISOString()
+  }
+
+  try {
+    const userRef = doc(db, 'users', firebaseUser.uid)
+    await setDoc(userRef, newProfile, { merge: true })
+  } catch (err) {
+    console.warn('[AUTH] Could not write users collection:', err.message)
+  }
+
+  return {
+    id: firebaseUser.uid,
+    customerId: firebaseUser.uid,
+    customerName: displayName,
+    displayName: displayName,
+    customerEmail: email,
+    authEmail: email,
+    accountId: null,
+    role: 'USER',
+    services: ['it', 'web'],
+    active: true
+  }
 }

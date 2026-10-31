@@ -31,7 +31,7 @@ import { auth, signInWithGoogle, signOutUser, signInWithEmail, sendPasswordReset
 // Customer & Admin
 // ==========================
 
-import { getAuthorizedCustomer } from './firebase/customers.js'
+import { getAuthorizedCustomer, getOrCreateAuthorizedCustomer } from './firebase/customers.js'
 import { getAuthorizedAdmin } from './firebase/admins.js'
 
 // ==========================
@@ -203,7 +203,7 @@ function App() {
             setIsAuthenticated(true)
 
             // Also load customer record if they exist so they can toggle views
-            const authorizedCustomer = await getAuthorizedCustomer(user.uid)
+            const authorizedCustomer = await getOrCreateAuthorizedCustomer(user)
             if (authorizedCustomer) {
               setCustomer(authorizedCustomer)
             }
@@ -212,7 +212,7 @@ function App() {
 
           // 2. Check if user is an authorized customer
           console.log('[AUTH] Customer lookup started')
-          const authorizedCustomer = await getAuthorizedCustomer(user.uid)
+          const authorizedCustomer = await getOrCreateAuthorizedCustomer(user)
 
           if (authorizedCustomer) {
             console.log('[AUTH] Google authentication succeeded (Customer role)')
@@ -539,6 +539,14 @@ function App() {
           >
             ← LANZAR.ME
           </a>
+          <a
+            href="https://portal.lanzar.me"
+            className="header-nav-link"
+            title="Open Client Portal"
+            style={{ marginLeft: '0.5rem' }}
+          >
+            CLIENT PORTAL
+          </a>
           {isAuthenticated && isAdmin && customer && (
             <button
               className="role-toggle-button"
@@ -745,7 +753,7 @@ function App() {
                   </a>
 
                   <a
-                    href={`mailto:jon@lanzar.me?subject=LANZAR%20Support%20Access%20Request&body=Hi%20Jon,%0A%0AMy%20account%20(${encodeURIComponent(currentUser?.email || '')})%20needs%20access%20to%20the%20LANZAR%20Support%20Terminal.`}
+                    href={`mailto:jon@lanzar.me?subject=LANZAR%20Support%20Access%20Request&body=Hi%20Jon,%0A%0AMy%20account%20(${encodeURIComponent(auth.currentUser?.email || '')})%20needs%20access%20to%20the%20LANZAR%20Support%20Terminal.`}
                     className="no-account-button email-button"
                     title="Send an email to jon@lanzar.me to sign up"
                   >
