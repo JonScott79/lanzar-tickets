@@ -20,7 +20,10 @@ function getSmtpTransporter() {
       host,
       port,
       secure: port === 465,
-      auth: { user, pass }
+      auth: { user, pass },
+      connectionTimeout: 8000, // 8s fail-fast connection timeout
+      greetingTimeout: 5000,   // 5s greeting timeout
+      socketTimeout: 15000     // 15s socket timeout
     })
   }
   return smtpTransporter
@@ -107,6 +110,9 @@ async function sendViaBrevo(toEmail, toName, subject, textContent, options = {})
     payload.headers = options.headers
   }
 
+  let brevoAccepted = false
+  let brevoError = null
+
   try {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -118,43 +124,45 @@ async function sendViaBrevo(toEmail, toName, subject, textContent, options = {})
       body: JSON.stringify(payload)
     })
 
-    if (!response.ok) {
-      const responseText = await response.text()
-      console.error(`[EMAIL ERROR] Brevo API request failed for recipient: ${toEmail}. Status: ${response.status}. Response: ${responseText}`)
-      
-      // Attempt SMTP fallback on Brevo REST failure (such as 401 IP restriction or 5xx downtime)
-      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
-        console.log(`[EMAIL FALLBACK] Attempting SMTP fallback for recipient: ${toEmail}...`)
-        try {
-          return await sendViaSmtp(toEmail, toName, subject, textContent, options)
-        } catch (smtpErr) {
-          console.error(`[EMAIL FALLBACK ERROR] SMTP fallback also failed for ${toEmail}:`, smtpErr.message)
-        }
-      }
-
-      throw new Error(`Brevo API returned status ${response.status}: ${responseText}`)
-    }
-
-    const data = await response.json()
-    const messageId = data.messageId || 'api-success-' + Date.now()
-    
-    // Log accepted after Brevo returns a successful HTTP response
-    console.log(`[EMAIL] Provider request accepted for recipient: ${toEmail}. Message ID: ${messageId}`)
-    
-    return { messageId, deliveryMethod: 'brevo_rest' }
-  } catch (error) {
-    console.error(`[EMAIL ERROR] Brevo API connection failed for recipient: ${toEmail}:`, error.message)
-    // Attempt SMTP fallback on fetch exception (e.g. network timeout or connection reset)
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
-      console.log(`[EMAIL FALLBACK] Attempting SMTP fallback after connection exception for ${toEmail}...`)
+    if (response.ok) {
+      brevoAccepted = true
+      let data = {}
       try {
-        return await sendViaSmtp(toEmail, toName, subject, textContent, options)
-      } catch (smtpErr) {
-        console.error(`[EMAIL FALLBACK ERROR] SMTP fallback also failed for ${toEmail}:`, smtpErr.message)
+        data = await response.json()
+      } catch (jsonErr) {
+        console.warn(`[EMAIL WARN] Could not parse Brevo JSON response for ${toEmail}:`, jsonErr.message)
       }
+      const messageId = data.messageId || 'api-success-' + Date.now()
+      console.log(`[EMAIL] Brevo REST accepted email for ${toEmail}. Message ID: ${messageId}`)
+      return { messageId, deliveryMethod: 'brevo_rest' }
+    } else {
+      const responseText = await response.text()
+      brevoError = new Error(`Brevo REST API returned status ${response.status}: ${responseText}`)
+      console.error(`[EMAIL ERROR] Brevo REST API failed for recipient: ${toEmail}. Status: ${response.status}. Response: ${responseText}`)
     }
-    throw error
+  } catch (netErr) {
+    brevoError = netErr
+    console.error(`[EMAIL ERROR] Brevo REST connection error for ${toEmail}:`, netErr.message)
   }
+
+  // If Brevo already accepted the message (e.g. 200/201), NEVER fallback to SMTP (prevents duplicate delivery)
+  if (brevoAccepted) {
+    return { messageId: 'api-success-' + Date.now(), deliveryMethod: 'brevo_rest' }
+  }
+
+  // Attempt SMTP fallback exactly once
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
+    console.log(`[EMAIL FALLBACK] Attempting SMTP fallback for recipient: ${toEmail}...`)
+    try {
+      const smtpResult = await sendViaSmtp(toEmail, toName, subject, textContent, options)
+      console.log(`[EMAIL FALLBACK SUCCESS] Delivered to ${toEmail} via SMTP. Message ID: ${smtpResult.messageId}`)
+      return smtpResult
+    } catch (smtpErr) {
+      console.error(`[EMAIL FALLBACK ERROR] SMTP fallback also failed for ${toEmail}:`, smtpErr.message)
+    }
+  }
+
+  throw brevoError || new Error(`Email dispatch failed for recipient: ${toEmail}`)
 }
 
 /**
