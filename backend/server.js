@@ -154,8 +154,15 @@ async function authenticateAdmin(req, res, next) {
 
   const token = authHeader.split('Bearer ')[1]
   try {
-    const decodedToken = await auth.verifyIdToken(token)
-    
+    const decodedToken = await auth.verifyIdToken(token, true)
+
+    // Reject suspended accounts under central LANZAR ID policy
+    const userDoc = await db.collection('users').doc(decodedToken.uid).get()
+    if (userDoc.exists && userDoc.data().status === 'suspended') {
+      console.warn(`[BACKEND AUTH WARN] Suspended user attempted admin action: ${decodedToken.uid}`)
+      return res.status(403).json({ error: 'Forbidden: Account suspended' })
+    }
+
     // Check if the user is in the admins collection
     const adminDoc = await db.collection('admins').doc(decodedToken.uid).get()
     if (!adminDoc.exists || adminDoc.data().active !== true) {
@@ -187,7 +194,16 @@ async function authenticateUser(req, res, next) {
 
   const token = authHeader.split('Bearer ')[1]
   try {
-    const decodedToken = await auth.verifyIdToken(token)
+    const decodedToken = await auth.verifyIdToken(token, true)
+
+    if (db) {
+      const userDoc = await db.collection('users').doc(decodedToken.uid).get()
+      if (userDoc.exists && userDoc.data().status === 'suspended') {
+        console.warn(`[BACKEND AUTH WARN] Suspended user attempted ticket action: ${decodedToken.uid}`)
+        return res.status(403).json({ error: 'Forbidden: Account suspended' })
+      }
+    }
+
     req.user = decodedToken
     next()
   } catch (error) {

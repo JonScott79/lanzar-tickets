@@ -154,6 +154,10 @@ function App() {
         .then(res => res.json().then(data => ({ ok: res.ok, data })))
         .then(({ ok, data }) => {
           if (!ok) throw new Error(data.error_description || data.error || 'Exchange failed');
+          if (data.session_id) {
+            try { sessionStorage.setItem('lanzar_session_id', data.session_id); } catch (_) {}
+          }
+          try { sessionStorage.removeItem('lanzar_silent_sso_attempted'); } catch (_) {}
           return signInWithCustomToken(data.custom_token);
         })
         .then(() => {
@@ -179,6 +183,31 @@ function App() {
 
         try {
           console.log('[AUTH] Login started for user:', user.email)
+
+          // Verify centralized LANZAR ID session when active (or handle suspended account)
+          try {
+            const hasSessionId = Boolean(sessionStorage.getItem('lanzar_session_id'))
+            const tokenResult = await user.getIdTokenResult()
+            const hasLanzarClaim = Boolean(tokenResult?.claims?.session_id || tokenResult?.claims?.lanzarSessionId)
+            if (hasSessionId || hasLanzarClaim) {
+              const idToken = tokenResult.token
+              const valRes = await fetch(authBackendUrl + '/api/id/session/validate', {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + idToken }
+              })
+              if (valRes.status === 401 || valRes.status === 403) {
+                const errBody = await valRes.json().catch(() => ({}))
+                if (valRes.status === 403 || errBody.error === 'session_revoked' || errBody.error === 'session_expired' || errBody.error === 'session_mismatch') {
+                  console.warn('[AUTH] Central LANZAR ID session invalidated:', errBody.error || valRes.status)
+                  try { sessionStorage.removeItem('lanzar_session_id') } catch (_) {}
+                  await signOutUser()
+                  return
+                }
+              }
+            }
+          } catch (valErr) {
+            console.warn('[AUTH] Non-fatal session validation check error:', valErr.message)
+          }
 
           // 1. Check if user is an authorized admin (safely handle permission errors)
           let authorizedAdmin = null
@@ -246,6 +275,38 @@ function App() {
           setIsInitializing(false)
         }
       } else {
+        // Attempt silent cookie-bridge SSO once if on *.lanzar.me and not returning from /exchange
+        try {
+          const urlParams = new URLSearchParams(window.location.search)
+          const hasAuthCode = Boolean(urlParams.get('code'))
+          const attempted = sessionStorage.getItem('lanzar_silent_sso_attempted')
+          const onLanzarDomain = window.location.hostname === 'lanzar.me' || window.location.hostname.endsWith('.lanzar.me')
+          if (!hasAuthCode && !attempted && onLanzarDomain) {
+            sessionStorage.setItem('lanzar_silent_sso_attempted', '1')
+            const ssoRes = await fetch(authBackendUrl + '/api/id/session/token', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Lanzar-Client': 'id'
+              },
+              body: JSON.stringify({ clientApp: 'tickets' })
+            })
+            if (ssoRes.ok) {
+              const ssoData = await ssoRes.json().catch(() => ({}))
+              if (ssoData.customToken) {
+                if (ssoData.sessionId) {
+                  sessionStorage.setItem('lanzar_session_id', ssoData.sessionId)
+                }
+                await signInWithCustomToken(ssoData.customToken)
+                return
+              }
+            }
+          }
+        } catch (ssoErr) {
+          console.warn('[AUTH] Silent SSO bridge check skipped:', ssoErr.message)
+        }
+
         // Logged out state reset
         console.log('[AUTH] User logged out')
         setIsAuthenticated(false)
@@ -383,6 +444,26 @@ function App() {
   const handleSignOut = async () => {
     setIsLoading(true)
     try {
+      const currentUser = auth.currentUser
+      const sessionId = sessionStorage.getItem('lanzar_session_id')
+      if (sessionId && currentUser) {
+        const idToken = await currentUser.getIdToken().catch(() => null)
+        if (idToken) {
+          await fetch(authBackendUrl + '/api/id/sessions/' + encodeURIComponent(sessionId), {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + idToken }
+          }).catch(() => {})
+        }
+      }
+      await fetch(authBackendUrl + '/api/id/session/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Lanzar-Client': 'id'
+        }
+      }).catch(() => {})
+      try { sessionStorage.removeItem('lanzar_session_id') } catch (_) {}
       await signOutUser()
     } catch (error) {
       console.error('Sign out failed:', error)
