@@ -1146,6 +1146,263 @@ app.post('/api/admin/newsletter/subscriber/status', authenticateAdmin, async (re
   }
 })
 
+// ============================================================================
+// Admin: Quick-Add Subscriber (In-Person / House Call / Consultation Enrollment)
+// Enforces affirmative consent, unsubscribe protection, and audit logging.
+// ============================================================================
+app.post('/api/admin/newsletter/subscriber/quick-add', authenticateAdmin, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
+  const { email, name, source, confirmedConsent } = req.body
+
+  // 1. Email format validation and normalization
+  const normalizedEmail = validateEmail(email)
+  if (!normalizedEmail) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_EMAIL',
+      error: 'A valid email address is required.'
+    })
+  }
+
+  // 2. Strict backend verification of affirmative consent
+  if (confirmedConsent !== true) {
+    return res.status(400).json({
+      success: false,
+      code: 'CONSENT_REQUIRED',
+      error: 'Affirmative consent confirmation is required. Administrator must verify the individual agreed to receive LANZAR marketing emails.'
+    })
+  }
+
+  // 3. Source normalization (focused on field consultations & referrals)
+  const allowedSources = ['house_call', 'consultation', 'referral', 'event', 'in_person']
+  const cleanSource = (source && allowedSources.includes(source)) ? source : 'house_call'
+
+  // 4. Administrator audit identity (authoritative UID)
+  const adminUid = req.admin?.uid || req.admin?.user_id || 'unknown_admin'
+  const adminEmail = req.admin?.email || null
+
+  try {
+    const docId = crypto.createHash('sha256').update(normalizedEmail).digest('hex')
+    const subRef = db.collection('subscribers').doc(docId)
+    const existing = await subRef.get()
+
+    if (existing.exists) {
+      const data = existing.data()
+
+      // Unsubscribe & Suppression Protection:
+      // NEVER automatically reactivate an unsubscribed or suppressed contact through Quick Add
+      if (data.status === 'unsubscribed' || data.suppressed === true) {
+        return res.status(409).json({
+          success: false,
+          code: 'PREVIOUSLY_UNSUBSCRIBED',
+          error: 'This contact previously unsubscribed or was suppressed.',
+          unsubscribedAt: data.unsubscribedAt ? (data.unsubscribedAt.toDate ? data.unsubscribedAt.toDate() : data.unsubscribedAt) : null,
+          details: 'Ordinary Quick Add cannot reactivate an unsubscribed contact. Re-subscription requires a dedicated affirmative re-consent workflow.'
+        })
+      }
+
+      // Existing Active Subscriber:
+      // Do NOT overwrite existing consent history or original subscribedAt / createdAt
+      return res.status(200).json({
+        success: true,
+        code: 'ALREADY_ACTIVE',
+        message: 'Contact is already an active subscriber. Existing record was preserved.',
+        subscribedAt: data.subscribedAt ? (data.subscribedAt.toDate ? data.subscribedAt.toDate() : data.subscribedAt) : null,
+        subscriber: {
+          id: docId,
+          email: data.email,
+          name: data.name || '',
+          status: 'active',
+          source: data.source
+        }
+      })
+    }
+
+    // New Active Subscriber:
+    const unsubscribeToken = crypto.randomBytes(32).toString('hex')
+    const consentEvent = {
+      timestamp: new Date().toISOString(),
+      source: cleanSource,
+      method: 'in_person_verbal',
+      adminUid,
+      adminEmail
+    }
+
+    const cleanName = (name && typeof name === 'string') ? name.trim().slice(0, 100) : ''
+
+    const newRecord = {
+      email: normalizedEmail,
+      name: cleanName,
+      status: 'active',
+      source: cleanSource,
+      consentMethod: 'in_person_verbal',
+      consentConfirmed: true,
+      consentHistory: [consentEvent],
+      unsubscribeToken,
+      addedByUid: adminUid,
+      addedByEmail: adminEmail,
+      subscribedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }
+
+    await subRef.set(newRecord)
+
+    return res.status(201).json({
+      success: true,
+      code: 'ENROLLED',
+      message: 'Subscriber successfully enrolled in the LANZAR Dispatch.',
+      subscriber: {
+        id: docId,
+        email: normalizedEmail,
+        name: cleanName,
+        status: 'active',
+        source: cleanSource
+      }
+    })
+  } catch (error) {
+    console.error('[ADMIN QUICK-ADD ERROR]', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to enroll subscriber: ' + error.message
+    })
+  }
+})
+
+// Helper: Sync contact suppression status with Brevo Contacts API
+async function syncBrevoSuppression(email, unblacklist = false) {
+  const apiKey = process.env.BREVO_API_KEY
+  if (!apiKey) return { status: 'skipped', reason: 'no_api_key' }
+  try {
+    const res = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ emailBlacklisted: !unblacklist })
+    })
+    if (res.ok) {
+      return { status: 'synced', emailBlacklisted: !unblacklist }
+    }
+    const txt = await res.text()
+    return { status: 'warning', statusCode: res.status, error: txt }
+  } catch (err) {
+    return { status: 'error', error: err.message }
+  }
+}
+
+// ============================================================================
+// Admin: Deliberate Re-subscription of Previously Unsubscribed Contact
+// Requires fresh affirmative consent, documented explanation, and preserves audit trail.
+// ============================================================================
+app.post('/api/admin/newsletter/subscriber/re-consent', authenticateAdmin, async (req, res) => {
+  if (!db) {
+    return res.status(500).json({ error: 'Database service is currently unavailable.' })
+  }
+
+  const { email, reconsentReason, confirmedReconsent, source } = req.body
+
+  const normalizedEmail = validateEmail(email)
+  if (!normalizedEmail) {
+    return res.status(400).json({ success: false, error: 'A valid email address is required.' })
+  }
+
+  if (confirmedReconsent !== true) {
+    return res.status(400).json({
+      success: false,
+      code: 'RECONSENT_CONFIRMATION_REQUIRED',
+      error: 'Administrator must affirmatively certify that the customer gave explicit fresh consent to re-subscribe.'
+    })
+  }
+
+  if (!reconsentReason || typeof reconsentReason !== 'string' || !reconsentReason.trim()) {
+    return res.status(400).json({
+      success: false,
+      code: 'RECONSENT_REASON_REQUIRED',
+      error: 'A specific explanation/reason for re-consent is required for auditing purposes.'
+    })
+  }
+
+  const adminUid = req.admin?.uid || req.admin?.user_id || 'unknown_admin'
+  const adminEmail = req.admin?.email || null
+
+  try {
+    const docId = crypto.createHash('sha256').update(normalizedEmail).digest('hex')
+    const subRef = db.collection('subscribers').doc(docId)
+    const existing = await subRef.get()
+
+    if (!existing.exists) {
+      return res.status(404).json({ success: false, error: 'Subscriber record not found.' })
+    }
+
+    const data = existing.data()
+    if (data.status === 'active' && !data.suppressed) {
+      return res.status(200).json({
+        success: true,
+        code: 'ALREADY_ACTIVE',
+        message: 'Subscriber is already active.'
+      })
+    }
+
+    // Preserve original unsubscribe history
+    const previousUnsubEvent = {
+      unsubscribedAt: data.unsubscribedAt ? (data.unsubscribedAt.toDate ? data.unsubscribedAt.toDate().toISOString() : data.unsubscribedAt) : null,
+      archivedAt: new Date().toISOString()
+    }
+
+    // Record new consent event with administrator UID
+    const newConsentEvent = {
+      timestamp: new Date().toISOString(),
+      type: 'resubscription_reaffirmation',
+      source: source || 'in_person_consultation',
+      method: 'in_person_verbal_reaffirmation',
+      reason: reconsentReason.trim().slice(0, 250),
+      adminUid,
+      adminEmail
+    }
+
+    const updates = {
+      status: 'active',
+      suppressed: false,
+      unsubscribedAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+      resubscribedAt: FieldValue.serverTimestamp(),
+      lastReactivatedByUid: adminUid,
+      lastReactivatedByEmail: adminEmail,
+      consentHistory: FieldValue.arrayUnion(newConsentEvent)
+    }
+
+    if (data.unsubscribedAt) {
+      updates.unsubscribeHistory = FieldValue.arrayUnion(previousUnsubEvent)
+    }
+
+    // Attempt to sync unblacklist/suppression state with Brevo Contacts API
+    try {
+      const brevoSync = await syncBrevoSuppression(normalizedEmail, true)
+      if (brevoSync.status === 'synced') {
+        updates.brevoSuppressionCleared = true
+      }
+    } catch (brevoErr) {
+      console.warn('[ADMIN RECONSENT] Brevo suppression sync non-blocking error:', brevoErr.message)
+    }
+
+    await docRef.update(updates)
+
+    return res.json({
+      success: true,
+      code: 'REACTIVATED',
+      message: `Subscriber ${normalizedEmail} successfully reactivated with documented affirmative consent.`
+    })
+  } catch (error) {
+    console.error('[ADMIN RECONSENT ERROR]', error)
+    return res.status(500).json({ success: false, error: 'Failed to reactivate subscriber: ' + error.message })
+  }
+})
+
 // Admin: Send test dispatch to admin
 app.post('/api/admin/newsletter/send-test', authenticateAdmin, async (req, res) => {
   const { subject, content, testEmail } = req.body
