@@ -1,18 +1,65 @@
 import dotenv from 'dotenv'
+import nodemailer from 'nodemailer'
 
 dotenv.config()
 
 const fromEmail = process.env.EMAIL_FROM || 'no-reply@lanzar.me'
 const notificationEmail = process.env.TICKET_NOTIFICATION_EMAIL || 'jon@lanzar.me'
 
-if (!process.env.BREVO_API_KEY) {
-  console.log('[EMAIL] BREVO_API_KEY environment variable is missing')
-  console.log('[EMAIL] Email delivery unavailable until production BREVO_API_KEY variable is configured')
+let smtpTransporter = null
+
+function getSmtpTransporter() {
+  if (smtpTransporter) return smtpTransporter
+  const host = process.env.SMTP_HOST
+  const port = parseInt(process.env.SMTP_PORT || '587', 10)
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASSWORD
+
+  if (host && user && pass) {
+    smtpTransporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass }
+    })
+  }
+  return smtpTransporter
+}
+
+if (!process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
+  console.log('[EMAIL] Neither BREVO_API_KEY nor SMTP_HOST is configured.')
+  console.log('[EMAIL] Outbound email delivery unavailable until production credentials are provided.')
 }
 
 /**
- * Dispatches an email using the Brevo HTTP API.
- * Falls back to mock logging if BREVO_API_KEY is not defined.
+ * Fallback to direct SMTP delivery using nodemailer.
+ */
+async function sendViaSmtp(toEmail, toName, subject, textContent, options = {}) {
+  const transporter = getSmtpTransporter()
+  if (!transporter) {
+    throw new Error('SMTP transport is not configured.')
+  }
+  const senderName = options.senderName || 'LANZAR Terminal'
+  const senderEmail = options.senderEmail || fromEmail
+
+  const mailOptions = {
+    from: `"${senderName}" <${senderEmail}>`,
+    to: toName ? `"${toName}" <${toEmail}>` : toEmail,
+    subject,
+    text: textContent,
+    html: options.htmlContent || undefined,
+    headers: options.headers || undefined
+  }
+
+  const info = await transporter.sendMail(mailOptions)
+  const messageId = info.messageId || 'smtp-success-' + Date.now()
+  console.log(`[EMAIL] SMTP fallback delivered email to ${toEmail}. Message ID: ${messageId}`)
+  return { messageId, deliveryMethod: 'smtp' }
+}
+
+/**
+ * Dispatches an email using the Brevo HTTP API with automatic SMTP fallback.
+ * Falls back to mock logging if neither is configured.
  */
 async function sendViaBrevo(toEmail, toName, subject, textContent, options = {}) {
   const apiKey = process.env.BREVO_API_KEY
@@ -20,13 +67,21 @@ async function sendViaBrevo(toEmail, toName, subject, textContent, options = {})
   const senderEmail = options.senderEmail || fromEmail
 
   if (!apiKey) {
-    console.log(`[EMAIL MOCK] Outbound email mock dispatch (no BREVO_API_KEY configured):`)
+    // If no Brevo API key, attempt SMTP directly before falling back to mock
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
+      try {
+        return await sendViaSmtp(toEmail, toName, subject, textContent, options)
+      } catch (smtpErr) {
+        console.error(`[EMAIL ERROR] Direct SMTP delivery failed for ${toEmail}:`, smtpErr.message)
+      }
+    }
+    console.log(`[EMAIL MOCK] Outbound email mock dispatch (no credentials configured):`)
     console.log(`  To: ${toEmail}`)
     console.log(`  Subject: ${subject}`)
     if (options.htmlContent) {
       console.log(`  [HTML body provided, length: ${options.htmlContent.length} chars]`)
     }
-    return { messageId: 'mock-id-' + Date.now() }
+    return { messageId: 'mock-id-' + Date.now(), deliveryMethod: 'mock' }
   }
 
   const payload = {
@@ -66,6 +121,17 @@ async function sendViaBrevo(toEmail, toName, subject, textContent, options = {})
     if (!response.ok) {
       const responseText = await response.text()
       console.error(`[EMAIL ERROR] Brevo API request failed for recipient: ${toEmail}. Status: ${response.status}. Response: ${responseText}`)
+      
+      // Attempt SMTP fallback on Brevo REST failure (such as 401 IP restriction or 5xx downtime)
+      if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
+        console.log(`[EMAIL FALLBACK] Attempting SMTP fallback for recipient: ${toEmail}...`)
+        try {
+          return await sendViaSmtp(toEmail, toName, subject, textContent, options)
+        } catch (smtpErr) {
+          console.error(`[EMAIL FALLBACK ERROR] SMTP fallback also failed for ${toEmail}:`, smtpErr.message)
+        }
+      }
+
       throw new Error(`Brevo API returned status ${response.status}: ${responseText}`)
     }
 
@@ -75,9 +141,18 @@ async function sendViaBrevo(toEmail, toName, subject, textContent, options = {})
     // Log accepted after Brevo returns a successful HTTP response
     console.log(`[EMAIL] Provider request accepted for recipient: ${toEmail}. Message ID: ${messageId}`)
     
-    return { messageId }
+    return { messageId, deliveryMethod: 'brevo_rest' }
   } catch (error) {
     console.error(`[EMAIL ERROR] Brevo API connection failed for recipient: ${toEmail}:`, error.message)
+    // Attempt SMTP fallback on fetch exception (e.g. network timeout or connection reset)
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD) {
+      console.log(`[EMAIL FALLBACK] Attempting SMTP fallback after connection exception for ${toEmail}...`)
+      try {
+        return await sendViaSmtp(toEmail, toName, subject, textContent, options)
+      } catch (smtpErr) {
+        console.error(`[EMAIL FALLBACK ERROR] SMTP fallback also failed for ${toEmail}:`, smtpErr.message)
+      }
+    }
     throw error
   }
 }

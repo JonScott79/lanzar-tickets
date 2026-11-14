@@ -1648,122 +1648,17 @@ app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
 })
 
 // =====================================
-// Admin Virtual Terminal: Phone Payments (Phase 6)
+// Admin Virtual Terminal: Hosted Payment Links (Phase 6 / PCI Remediation)
 // =====================================
 
 /**
- * Charge a customer's credit card directly over the phone via Stripe Virtual Terminal.
+ * PCI Remediation: Raw card collection is strictly disabled to prevent PCI scope expansion (SAQ D).
+ * Admins must generate secure hosted Stripe payment links or send invoices instead.
  */
 app.post('/api/admin/billing/charge-card', authenticateAdmin, async (req, res) => {
-  const {
-    customerName,
-    customerEmail,
-    customerPhone,
-    amount,
-    description,
-    serviceId,
-    cardNumber,
-    expMonth,
-    expYear,
-    cvc,
-    postalCode
-  } = req.body
-
-  if (!customerName || !customerEmail || !amount || !cardNumber || !expMonth || !expYear || !cvc) {
-    return res.status(400).json({ error: 'Missing required card or customer fields.' })
-  }
-
-  const cleanAmount = parseInt(amount, 10)
-  if (isNaN(cleanAmount) || cleanAmount < 50) {
-    return res.status(400).json({ error: 'Minimum charge amount is $0.50.' })
-  }
-
-  if (!stripe) {
-    console.log(`[STRIPE MOCK] Admin ${req.user.email} simulated phone charge of $${(cleanAmount / 100).toFixed(2)} for ${customerName}`)
-    return res.json({
-      success: true,
-      mock: true,
-      paymentIntentId: `pi_mock_${Date.now()}`,
-      status: 'succeeded',
-      receiptUrl: null,
-      message: 'Charge simulated successfully in test environment.'
-    })
-  }
-
-  try {
-    // 1. Create a PaymentMethod from raw card data (PCI compliant via Stripe direct API tokenization)
-    const cleanNumber = cardNumber.toString().replace(/\D/g, '')
-    const paymentMethod = await stripe.paymentMethods.create({
-      type: 'card',
-      card: {
-        number: cleanNumber,
-        exp_month: parseInt(expMonth, 10),
-        exp_year: parseInt(expYear, 10),
-        cvc: cvc.toString().trim()
-      },
-      billing_details: {
-        name: customerName.trim(),
-        email: customerEmail.trim(),
-        phone: customerPhone ? customerPhone.trim() : undefined,
-        address: postalCode ? { postal_code: postalCode.trim() } : undefined
-      }
-    })
-
-    // 2. Create and immediately confirm PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: cleanAmount,
-      currency: 'usd',
-      payment_method: paymentMethod.id,
-      confirm: true,
-      description: description || `Phone Terminal Charge - ${serviceId || 'Custom'}`,
-      receipt_email: customerEmail.trim(),
-      payment_method_types: ['card'],
-      metadata: {
-        chargedByAdmin: req.user.email,
-        adminUid: req.user.uid,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone || '',
-        serviceId: serviceId || 'phone_terminal'
-      }
-    })
-
-    const receiptUrl = paymentIntent.charges?.data?.[0]?.receipt_url || null
-
-    // 3. Store record in Firestore
-    if (db) {
-      try {
-        await db.collection('phone_payments').doc(paymentIntent.id).set({
-          id: paymentIntent.id,
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
-          status: paymentIntent.status,
-          customerName: customerName.trim(),
-          customerEmail: customerEmail.trim(),
-          customerPhone: customerPhone ? customerPhone.trim() : null,
-          serviceId: serviceId || 'custom',
-          description: description || 'Phone Terminal Charge',
-          chargedByAdmin: req.user.email,
-          adminUid: req.user.uid,
-          receiptUrl,
-          createdAt: FieldValue.serverTimestamp()
-        })
-      } catch (dbErr) {
-        console.warn('[DB WARN] Could not log phone payment record:', dbErr.message)
-      }
-    }
-
-    console.log(`[STRIPE TERMINAL] Successfully charged $${(cleanAmount / 100).toFixed(2)} to ${customerEmail} (Intent: ${paymentIntent.id})`)
-    return res.json({
-      success: true,
-      paymentIntentId: paymentIntent.id,
-      status: paymentIntent.status,
-      receiptUrl
-    })
-  } catch (err) {
-    console.error('[STRIPE CHARGE ERROR]', err)
-    return res.status(400).json({ error: err.message || 'Payment processing failed.' })
-  }
+  return res.status(403).json({
+    error: 'Direct card collection is disabled for PCI-DSS compliance. Please generate a secure Stripe Payment Link using /api/admin/billing/generate-link.'
+  })
 })
 
 /**
