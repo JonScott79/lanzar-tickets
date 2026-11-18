@@ -1628,8 +1628,10 @@ app.post('/api/billing/webhook', async (req, res) => {
       console.error('[STRIPE WEBHOOK ERROR] Signature verification failed:', err.message)
       return res.status(400).send(`Webhook Signature Verification Error: ${err.message}`)
     }
+  } else if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'staging') {
+    return res.status(500).json({ error: 'Stripe webhook signing secret is not configured.' })
   } else {
-    // Development or test mode without live signature secret
+    // Local development/test mode only without live signature secret
     event = req.body
   }
 
@@ -1649,7 +1651,11 @@ app.post('/api/billing/webhook', async (req, res) => {
 // Support Customer Lookup & Caller-Verification (Phase 3)
 // =====================================
 
-const SUPPORT_OTP_SECRET = process.env.SUPPORT_OTP_SECRET || 'lanzar_support_caller_otp_secret_key_2026'
+const SUPPORT_OTP_SECRET = process.env.SUPPORT_OTP_SECRET || (
+  (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'staging')
+    ? null
+    : 'dev_only_support_caller_otp_secret_2026'
+)
 
 function maskEmail(email) {
   if (!email || !email.includes('@')) return '***@***.***'
@@ -1777,6 +1783,9 @@ app.post('/api/admin/support/challenge', authenticateAdmin, async (req, res) => 
     // 2. Generate secure 6-digit OTP
     const otp = crypto.randomInt(100000, 999999).toString()
     const otpHash = crypto.createHmac('sha256', SUPPORT_OTP_SECRET).update(otp).digest('hex')
+    if (!SUPPORT_OTP_SECRET) {
+      return res.status(500).json({ error: 'SUPPORT_OTP_SECRET is not configured.' })
+    }
     const challengeId = `ch_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 
@@ -1784,8 +1793,8 @@ app.post('/api/admin/support/challenge', authenticateAdmin, async (req, res) => 
     await db.collection('support_challenges').doc(challengeId).set({
       challengeId,
       customerUid,
-      adminUid: req.user.uid,
-      adminEmail: req.user.email,
+      adminUid: req.admin.uid,
+      adminEmail: req.admin.email,
       channel,
       destinationMasked: maskEmail(customerEmail),
       otpHash,
@@ -1803,7 +1812,7 @@ app.post('/api/admin/support/challenge', authenticateAdmin, async (req, res) => 
       otpCode: otp
     })
 
-    console.log(`[SUPPORT CHALLENGE] Initiated challenge ${challengeId} for ${customerUid} by admin ${req.user.email}`)
+    console.log(`[SUPPORT CHALLENGE] Initiated challenge ${challengeId} for ${customerUid} by admin ${req.admin.email}`)
 
     return res.json({
       success: true,
@@ -1857,6 +1866,9 @@ app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
     }
 
     // Verify code HMAC
+    if (!SUPPORT_OTP_SECRET) {
+      return res.status(500).json({ error: 'SUPPORT_OTP_SECRET is not configured.' })
+    }
     const candidateHash = crypto.createHmac('sha256', SUPPORT_OTP_SECRET).update(code.trim()).digest('hex')
     const isMatch = crypto.timingSafeEqual(Buffer.from(challenge.otpHash), Buffer.from(candidateHash))
 
@@ -1880,8 +1892,8 @@ app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
       verificationId,
       challengeId,
       customerUid: challenge.customerUid,
-      adminUid: req.user.uid,
-      adminEmail: req.user.email,
+      adminUid: req.admin.uid,
+      adminEmail: req.admin.email,
       channel: challenge.channel,
       destinationMasked: challenge.destinationMasked,
       status: 'verified',
@@ -1890,7 +1902,7 @@ app.post('/api/admin/support/verify', authenticateAdmin, async (req, res) => {
       timestamp: FieldValue.serverTimestamp()
     })
 
-    console.log(`[SUPPORT VERIFICATION SUCCESS] Verified caller ${challenge.customerUid} by ${req.user.email} (Audit: ${verificationId})`)
+    console.log(`[SUPPORT VERIFICATION SUCCESS] Verified caller ${challenge.customerUid} by ${req.admin.email} (Audit: ${verificationId})`)
 
     return res.json({
       success: true,
@@ -2017,6 +2029,8 @@ app.post('/api/inquiries', async (req, res) => {
     await db.collection('tickets').doc(ticketId).set({
       id: ticketId,
       ticketId,
+      authUid: matchedCustomerUid || null,
+      customerId: matchedCustomerUid || null,
       customerUid: matchedCustomerUid,
       accountId: matchedAccountId,
       requesterName: (name || normalizedEmail.split('@')[0]).trim(),
@@ -2105,9 +2119,11 @@ app.post('/api/tickets/claim', authenticateUser, async (req, res) => {
       return res.status(400).json({ error: 'Ticket claim link has expired.' })
     }
 
-    // Claim ticket
+    // Claim ticket (align authUid & customerId with firestore.rules ownership check)
     await ticketRef.update({
       isGuest: false,
+      authUid: req.user.uid,
+      customerId: req.user.uid,
       customerUid: req.user.uid,
       claimToken: null,
       claimedAt: FieldValue.serverTimestamp(),

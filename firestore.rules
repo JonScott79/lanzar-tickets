@@ -87,7 +87,10 @@ service cloud.firestore {
           request.resource.data.authUid == request.auth.uid &&
           request.resource.data.customerId == request.auth.uid &&
           request.resource.data.status == 'PENDING' &&
-          request.resource.data.history.size() == 0
+          request.resource.data.history.size() == 0 &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true &&
+          (!('accountId' in request.resource.data) || request.resource.data.accountId == null || belongsToAccount(request.resource.data.accountId))
         )
       );
       // Read access isolated to owners and admins

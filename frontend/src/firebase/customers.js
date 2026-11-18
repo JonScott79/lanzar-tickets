@@ -136,36 +136,6 @@ export async function getOrCreateAuthorizedCustomer(firebaseUser) {
     return existingCustomer
   }
 
-  // Auto-provision initial customer profile with default IT & Web ticket access
-  const displayName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Customer')
-  const email = firebaseUser.email || ''
-
-  const newProfile = {
-    displayName,
-    email,
-    active: true,
-    role: 'USER',
-    services: ['it', 'web'],
-    createdAt: new Date().toISOString()
-  }
-
-  try {
-    const userRef = doc(db, 'users', firebaseUser.uid)
-    await setDoc(userRef, newProfile, { merge: true })
-  } catch (err) {
-    console.warn('[AUTH] Could not write users collection:', err.message)
-  }
-
-  return {
-    id: firebaseUser.uid,
-    customerId: firebaseUser.uid,
-    customerName: displayName,
-    displayName: displayName,
-    customerEmail: email,
-    authEmail: email,
-    accountId: null,
-    role: 'USER',
-    services: ['it', 'web'],
-    active: true
-  }
+  // Do NOT auto-provision an active customer in-memory when Firestore profile is missing or inactive
+  return null
 }
